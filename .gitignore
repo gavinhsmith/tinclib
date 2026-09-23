@@ -53,3 +53,21 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# Python bytecode (tests/hw/run.py)
+__pycache__/
+*.py[cod]
+
+# Host-side unit test build (make -C tests)
+tests/build/
+
+# Hardware test runs (tests/hw/run.py): resolved configs, dumps, PNGs
+tests/hw/build/
+
+# TI-84 Plus CE Toolchain (CEdev) build artifacts
+obj/
+bin/
+*.8xp
+*.8xv
+*.8ek
+*.8xg

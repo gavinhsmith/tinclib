@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]  # tags run this through release.yml instead
+  pull_request:
+  workflow_call:
+
+jobs:
+  test:
+    name: Host unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - name: Run tests (gcc, ASan + UBSan)
+        run: make -C tests CC=gcc
+
+      - name: Run tests (clang, ASan + UBSan)
+        run: make -C tests clean test CC=clang
+
+  build:
+    name: Build (CEdev)
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - name: Set up CE C/C++ toolchain
+        uses: gavinhsmith/setup-ti84-ce-toolchain@v1.0.0
+
+      - name: Build examples
+        run: make
+
+      - name: Build hardware tests
+        run: make hw-build
+
+      # The hardware tests themselves need a TI-84 Plus CE ROM, which can't
+      # live in CI; run them locally with `make hw-test`.
+
+      - name: Check unused code is left out
+        run: make size-check

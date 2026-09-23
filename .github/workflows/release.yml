@@ -1,0 +1,65 @@
+name: Release
+
+# Pushing a version tag (e.g. v0.1.0) runs CI, then drafts a GitHub release
+# with the files needed to build tinclib into a CEdev project. Review the
+# draft, add the changes, and publish it by hand.
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    name: Draft release
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - name: Check TINC_VERSION matches the tag
+        run: |
+          if ! grep -q "^#define TINC_VERSION \"${GITHUB_REF_NAME#v}\"$" src/tinclib.h; then
+            echo "::error::TINC_VERSION in src/tinclib.h must be \"${GITHUB_REF_NAME#v}\" for tag $GITHUB_REF_NAME."
+            exit 1
+          fi
+
+      # The protocol files come from the pinned submodule, unchanged.
+      - name: Package
+        run: |
+          proto=external/tinclib-protocol
+          mkdir -p tinclib/src
+          cp src/*.c src/*.h tinclib/src/
+          cp $proto/protocol.h $proto/crc16.c $proto/crc16.h $proto/tinc_frame.c $proto/tinc_frame.h tinclib/src/
+          cp LICENSE tinclib/LICENSE
+          cp $proto/LICENSE tinclib/LICENSE-protocol
+          echo "tinclib-protocol $(git -C $proto describe --tags --always)" > tinclib/PROTOCOL_VERSION
+          zip -r "tinclib-$GITHUB_REF_NAME.zip" tinclib
+
+      - name: Draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notes.md <<NOTES
+          ## Using tinclib
+
+          1. Unzip \`tinclib-$GITHUB_REF_NAME.zip\` into your CEdev project's \`lib/\` folder, giving \`lib/tinclib/\`.
+          2. Add its sources to your project's makefile:
+
+             \`\`\`make
+             CFLAGS = -Wall -Wextra -Oz -Ilib/tinclib/src
+             EXTRA_C_SOURCES = \$(wildcard lib/tinclib/src/*.c)
+             \`\`\`
+
+          3. \`#include "tinclib.h"\` and build with \`make\`.
+
+          Keep the library inside your project directory: on Windows, CEdev can't build sources reached through \`..\`. The calculator needs the [CE C libraries](https://github.com/CE-Programming/libraries/releases) (usbdrvce, srldrvce, fileioc), an ESP8266 board running tinclib-firmware, and TINCLIBC for Wi-Fi setup.
+          NOTES
+          gh release create "$GITHUB_REF_NAME" "tinclib-$GITHUB_REF_NAME.zip" \
+            --draft --title "$GITHUB_REF_NAME" --notes-file notes.md
