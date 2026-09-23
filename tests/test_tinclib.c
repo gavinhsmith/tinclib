@@ -200,6 +200,39 @@ static void test_last_chunk_held_until_read(void)
     CHECK(tinc_poll() == TINC_DONE);
 }
 
+/* frame[] holds both the pending body chunk and every reply, so a
+ * tinc_isActive() between reads must not exchange anything mid-chunk. */
+static void test_is_active_mid_chunk(void)
+{
+    static char big[300];
+    char body[310];
+    tinc_request_t req = get("http://x/");
+    tinc_state_t st;
+    uint16_t len = 0;
+    int i, guard = 0;
+
+    for (i = 0; i < 299; i++)
+        big[i] = (char)('A' + i % 26);
+    setup();
+    fake.body = big;
+    fake.chunk_max = 100;
+    CHECK(tinc_init(NULL) == TINC_OK);
+    CHECK(tinc_request(&req) == TINC_OK);
+    while ((st = tinc_poll()) != TINC_DONE && st != TINC_ERROR && ++guard < 1000) {
+        uint16_t statuses = fake.executed[TINC_T_STATUS];
+        int16_t n = tinc_read(body + len, 7);   /* leaves most of each chunk pending */
+
+        len = (uint16_t)(len + n);
+        CHECK(tinc_isActive(TINC_WIFI));
+        if (n == 7)
+            CHECK(fake.executed[TINC_T_STATUS] == statuses);
+    }
+    body[len] = '\0';
+    CHECK(st == TINC_DONE);
+    CHECK(strcmp(body, big) == 0);
+    CHECK(fake.executed[TINC_T_STATUS] > 0);  /* between chunks it does ask */
+}
+
 static void test_lost_reply_is_not_rerun(void)
 {
     char body[64];
@@ -444,6 +477,7 @@ int main(void)
     RUN(test_is_active);
     RUN(test_get_chunked);
     RUN(test_last_chunk_held_until_read);
+    RUN(test_is_active_mid_chunk);
     RUN(test_lost_reply_is_not_rerun);
     RUN(test_board_gone_quiet);
     RUN(test_esp_reset_mid_request);

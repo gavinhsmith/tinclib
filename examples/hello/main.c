@@ -1,6 +1,7 @@
 /*
- * GETs a page and prints the status, the content type and the start of the
- * body on the home screen. Sends the user to TINCLIBC when Wi-Fi isn't set up.
+ * GETs a page and prints the status, the content type and the body on the
+ * home screen, a screenful at a time ([clear] stops). Sends the user to
+ * TINCLIBC when Wi-Fi isn't set up.
  */
 
 #include <stdio.h>
@@ -11,9 +12,33 @@
 
 #define URL "http://example.com/"
 
-static void wait_key(void) {
-    while (!os_GetCSC()) {
+static uint8_t wait_key(void) {
+    uint8_t k;
+
+    while (!(k = os_GetCSC())) {
     }
+    return k;
+}
+
+/* Prints the body, pausing when the 26x10 home screen is full. Returns
+ * false if the user pressed [clear] at the pause. */
+static bool show(const char *s, int16_t n) {
+    unsigned int row, col;
+
+    while (n--) {
+        char c = *s++;
+
+        os_GetCursorPos(&row, &col);
+        if (row == 9 && (c == '\n' || col == 25)) {
+            if (wait_key() == sk_Clear)
+                return false;
+            os_ClrHome();
+            if (c == '\n')
+                continue;
+        }
+        putchar(c);
+    }
+    return true;
 }
 
 int main(void) {
@@ -22,7 +47,7 @@ int main(void) {
     tinc_err_t err;
     tinc_state_t st;
     char buf[64];
-    uint16_t shown = 0;
+    bool shown = false;
 
     os_ClrHome();
     err = tinc_init(&cfg);
@@ -48,16 +73,13 @@ int main(void) {
         goto out;
     }
     while ((st = tinc_poll()) != TINC_DONE && st != TINC_ERROR) {
-        int16_t n = tinc_read(buf, sizeof buf - 1);
+        int16_t n = tinc_read(buf, sizeof buf);
 
-        if (n && !shown)
+        if (n && !shown) {
             printf("%u %s\n", tinc_httpStatus(), tinc_contentType());
-        if (n && shown < 120) {
-            buf[n] = '\0';
-            fputs(buf, stdout);
-            shown += n;
+            shown = true;
         }
-        if (os_GetCSC()) {
+        if (!show(buf, n) || os_GetCSC() == sk_Clear) {
             tinc_abort();
             break;
         }
