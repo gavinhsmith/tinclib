@@ -23,9 +23,16 @@ automatically. That's packaging, not a fork.
   everything protocol 0.1 allows: HELLO, STATUS, REQ_BEGIN (GET,
   `http://` only), REQ_STATUS, BODY_READ, REQ_ABORT, plus the TINCLIBC
   handoff.
-- **Not yet run against a real ESP board.** Everything on the wire is
-  verified only against the fake board in `tests/stubs/` and the protocol's
-  golden vectors. First contact with real firmware is the next big step.
+- **Real firmware, from a PC:** `make pc-link` builds `tools/pc_link.c`
+  (the real `src/`, with srldrvce swapped for Win32 serial) and runs it
+  against a board on a COM port. Against the v0.1 firmware on COM5, HELLO,
+  STATUS and a refused REQ_BEGIN (`WIFI_DOWN`) all work. A full GET is
+  untested until the board joins Wi-Fi: it reported `FAILED`.
+- **Not yet run on a calculator with a board.** The board on COM5 uses a
+  **CP210x** bridge, and srldrvce supports only CDC, FTDI and PL2303 (the
+  CH340 boards aren't supported either), so a calculator won't see it.
+  Needs an FTDI/PL2303 adapter on the ESP's UART, or a native-USB chip:
+  a hardware decision for the user.
 - POST (`BODY_WRITE`), HTTPS (`TINC_SECURING`/TLS), `HDR_GET` and the BOOT
   event are all waiting on the protocol. When they land there, add them
   here. POST currently returns `TINC_ERR_UNSUPPORTED_METHOD`.

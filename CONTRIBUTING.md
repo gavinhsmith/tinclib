@@ -48,6 +48,7 @@ make               # build every example into bin/<example>/
 make hello         # or one of them
 make hw-build      # build the hardware test programs
 make size-check    # check the linker drops what a program doesn't use
+make pc-link       # tinclib on the PC against a real board: bin/pc_link.exe COM5 [url]
 make clean         # remove all build output
 ```
 
