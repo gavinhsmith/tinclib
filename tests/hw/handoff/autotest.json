@@ -1,0 +1,41 @@
+{
+  "transfer_files": [
+    "bin/hw_handoff/TAHANDOF.8xp",
+    "bin/hw_stub_tinclibc/TINCLIBC.8xp"
+  ],
+  "target": {
+    "name": "TAHANDOF",
+    "isASM": true
+  },
+  "sequence": [
+    "action|launch",
+    "hashWait|1",
+    "delay|3000",
+    "key|clear",
+    "hashWait|2"
+  ],
+  "hashes": {
+    "1": {
+      "description": "app -> TINCLIBC -> app round trip passed (green)",
+      "timeout": 15000,
+      "start": "vram_start",
+      "size": "vram_8_size",
+      "expected_CRCs": [
+        "22D544B5"
+      ]
+    },
+    "2": {
+      "description": "Program exited to a cleared home screen ([clear] is sent 3 s late: keys pressed right after tinc_shutdown() are missed in CEmu)",
+      "timeout": 5000,
+      "start": "vram_start",
+      "size": "vram_16_size",
+      "expected_CRCs": [
+        "FFAF89BA",
+        "101734A5",
+        "9DA19F44",
+        "A32840C8",
+        "349F4775"
+      ]
+    }
+  }
+}
