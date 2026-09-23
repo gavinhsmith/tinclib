@@ -178,6 +178,7 @@ static void handle(const tinc_parser *p)
         tinc_put_u16(out + TINC_HELLO_CAPS, 0);
         tinc_put_u16(out + TINC_HELLO_MAX_PAYLOAD, fake.max_payload);
         tinc_put_u32(out + TINC_HELLO_FREE_HEAP, 20000);
+        out[TINC_HELLO_WIFI_SLOTS] = 3;
         reply(0, p->type, p->seq, out, TINC_HELLO_RESP_LEN);
         esp.hello_done = true;
         esp.cache_valid = false;
