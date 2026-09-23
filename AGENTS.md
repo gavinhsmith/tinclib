@@ -8,9 +8,41 @@ This is the library apps `#include`; it is **not** the config app
 (`tinclib-config`) and **not** the firmware (`tinclib-firmware`) — keep
 those concerns out of this repo.
 
-Consumes `tinclib-protocol` as a pinned dependency. **Never fork or
-hand-copy `protocol.h`/`crc16.c`.** If something needs a protocol change,
-that goes in `tinclib-protocol` first.
+Consumes `tinclib-protocol` as a pinned dependency: a git submodule at
+`external/tinclib-protocol`, currently on tag **`v0.1.0`**. It lives inside
+the repo root because CEdev on Windows can't build sources reached through
+`..`. **Never fork or hand-copy `protocol.h`/`crc16.c`.** If something needs
+a protocol change, that goes in `tinclib-protocol` first; then bump the
+submodule here (pre-1.0, in step with tinclib-firmware: HELLO needs an exact
+MAJOR.MINOR match). The release zip bundles the pinned protocol files
+automatically. That's packaging, not a fork.
+
+## Where things stand
+
+- **v0.1.0 merged to `main`** (PR #1, branch `phase-1`). It implements
+  everything protocol 0.1 allows: HELLO, STATUS, REQ_BEGIN (GET,
+  `http://` only), REQ_STATUS, BODY_READ, REQ_ABORT, plus the TINCLIBC
+  handoff.
+- **Not yet run against a real ESP board.** Everything on the wire is
+  verified only against the fake board in `tests/stubs/` and the protocol's
+  golden vectors. First contact with real firmware is the next big step.
+- POST (`BODY_WRITE`), HTTPS (`TINC_SECURING`/TLS), `HDR_GET` and the BOOT
+  event are all waiting on the protocol. When they land there, add them
+  here. POST currently returns `TINC_ERR_UNSUPPORTED_METHOD`.
+- Cross-repo follow-up: tinclib-config must **exit** when done instead of
+  relaunching `return_to` (see Handoff below), and must match the TINCHND
+  layout in `src/tinc_config.c`.
+
+## Source layout
+
+| File | What |
+|---|---|
+| `src/tinclib.h` | The whole public API, `TINC_VERSION`, tunables (`TINC_RX_BUF_SIZE`, `TINC_DEVICE_WAIT_MS`, `TINC_WIFI_WAIT_MS`) |
+| `src/tinc_internal.h` | The single state struct `tinc_g`, `tinc_xfer()` and helpers |
+| `src/tinc_core.c` | USB/srldrvce, frames streamed out piece by piece (no TX buffer), stop-and-wait with same-SEQ retries, HELLO, re-handshake on `ERR_NO_HELLO`, `tinc_errString` |
+| `src/tinc_wifi.c` | `tinc_isActive` |
+| `src/tinc_http.c` | The one request: begin, poll, read, abort |
+| `src/tinc_config.c` | `tinc_openConfig`, TINCHND layout, setup-result pickup |
 
 ## Toolchain
 
@@ -21,7 +53,15 @@ that goes in `tinclib-protocol` first.
 - `usb_HandleEvents()` must be called regularly for the USB stack to work;
   library functions that touch the link (`tinc_poll()` etc.) should pump
   this internally so an app that only calls the high-level API still works
-  without explicitly managing USB events itself.
+  without explicitly managing USB events itself. (Done: every wait in
+  `tinc_core.c` pumps it.)
+- The USB handler also accepts a PC acting as USB host
+  (`USB_HOST_CONFIGURE_EVENT`), so a PC-side fake board can stand in for
+  the ESP during development.
+- All timing uses `clock()` (`CLOCKS_PER_SEC` = 32768 on CE) through
+  `tinc_elapsed()`. It is verified to run on the real OS by
+  `tests/hw/nodevice`. Host tests replace it with a fake clock
+  (`-Dclock=tinc_fake_clock`).
 
 ## Distribution model: static, not LibLoad
 
@@ -31,20 +71,27 @@ eZ80 assembly, which isn't realistic here, and LibLoad's documentation
 situation makes it a bad bet regardless. **Do not propose LibLoad.** The
 model is:
 - Static linking: `tinclib.h` + a `src/` directory of `.c` files that a
-  consuming program's build pulls in directly (copy, submodule, or a
-  Makefile include — whichever the toolchain's project structure makes
-  cleanest; confirm before assuming).
-- Rely on the linker discarding unused functions/data (function/data
-  sections + `-Oz`) so a program that only uses a few features doesn't pay
-  for the whole library. **Verify this behavior with a real test program**
-  before assuming it holds — don't just assert it works.
+  consuming program's build pulls in directly. Decided: the release zip
+  (`tinclib/src/`, protocol files included) is unzipped into the app's
+  `lib/` and added with `EXTRA_C_SOURCES = $(wildcard lib/tinclib/src/*.c)`
+  (see README).
+- Rely on the linker discarding unused functions/data so a program that
+  only uses a few features doesn't pay for the whole library. **Verified**
+  with CEdev v15 (LTO, `-Oz`): `examples/size_min` built with only
+  `tinc_init`/`tinc_isActive` is 4,013 bytes, and the same program using
+  the whole API is 8,017 bytes. `make size-check` (in CI) fails if the gap
+  drops below 2,000 bytes.
 - Split source by feature (core/framing, Wi-Fi status, HTTP request
   handling) so optional pieces stay separable even without perfect dead-code
   elimination.
 - State lives in a small number of static buffers/structs sized by
   compile-time defines (`TINC_RX_BUF_SIZE`, `TINC_MAX_SOCKETS`-equivalent,
   etc.) — **no `malloc`**. This is a RAM-constrained target; dynamic
-  allocation was never on the table.
+  allocation was never on the table. Currently there is one frame buffer
+  (`TINC_FRAME_BUF(TINC_RX_BUF_SIZE)`, default 264 bytes), which also holds
+  the pre-fetched body chunk, plus srldrvce's 256-byte ring buffer. The
+  shared buffer is marked `ponytail:` in `tinc_internal.h`: split it if POST
+  streaming needs traffic while a chunk is pending.
 
 ## API shape — read this before changing any function signature
 
@@ -63,7 +110,7 @@ camelCase after the `tinc_` prefix — e.g. `tinc_isActive`, `tinc_httpStatus`,
 not `tinc_IsActive` or `tinc_is_active`). Types: `tinc_snake_case_t`.
 Constants: `TINC_SCREAMING_CASE`.
 
-### Current shape (subject to refinement, but this is the agreed baseline)
+### Current shape (as implemented in v0.1.0; `src/tinclib.h` is authoritative)
 
 ```c
 typedef struct {
@@ -95,6 +142,21 @@ void         tinc_abort(void);
 
 tinc_err_t   tinc_openConfig(const char *hint);   /* handoff to TINCLIBC; returns only on failure */
 ```
+
+Implementation details worth knowing:
+- `tinc_err_t` is `uint8_t`. It reuses protocol.h's wire codes (`TINC_OK`,
+  `TINC_ERR_DNS`, ...) unchanged, and adds library-only codes from `0x80`:
+  `NO_DEVICE`, `NO_REPLY`, `ESP_RESET`, `NOT_INIT`, `UNSUPPORTED_METHOD`,
+  `SETUP_CANCELLED`, `SETUP_FAILED`, `NO_CONFIG_APP`. Don't duplicate a
+  wire code under a new name.
+- `tinc_state_t` also has `TINC_IDLE` (no request yet, or after
+  `tinc_abort()`). `TINC_DONE` is reported only once EOF has arrived
+  **and** the app has read the last chunk.
+- The protocol's Wi-Fi states are `NO_CREDS`/`CONNECTING`/`CONNECTED`/`FAILED`.
+  The "NO_NETWORKS/UNREACHABLE" wording below maps to `NO_CREDS`/`FAILED`.
+- A board reset mid-request (`ERR_NO_HELLO`) triggers an automatic
+  re-HELLO. The request fails with `TINC_ERR_ESP_RESET` and is never
+  resent. Commands outside a request are resent once.
 
 Key properties to preserve:
 - **One request at a time.** No request handle struct passed around by the
@@ -162,9 +224,47 @@ Key properties to preserve:
 - Target has very limited RAM. No `malloc`. Buffer sizes are compile-time
   constants the consuming program can tune.
 - All wire-facing multi-byte values are little-endian, matching the eZ80 —
-  but don't assume that means no work is needed; structs must still be
-  explicitly packed and typed (`uint16_t`, not `int`) since the eZ80's
-  native `int` is 24 bits, which silently breaks assumptions carried over
-  from 32-bit protocol code.
+  but don't assume that means no work is needed. Build and parse payloads
+  with protocol.h's byte-offset macros and `tinc_get_u16/u32`/`tinc_put_*`
+  helpers, never packed structs, and use explicit types (`uint16_t`, not
+  `int`): the eZ80's native `int` is 24 bits, which silently breaks
+  assumptions carried over from 32-bit protocol code.
 - No BLE/Bluetooth surface in this library in v1 — the underlying ESP8266
   firmware has none anyway.
+
+## Testing
+
+- **Host unit tests** (`make -C tests`, in CI under gcc + clang with
+  ASan/UBSan): the library is built against stand-in CE headers in
+  `tests/stubs/` and talks to a fake ESP (`stubs.c`) that uses
+  tinclib-protocol's own parser/encoder. The golden-vector test checks the
+  CE side of a whole conversation byte for byte against
+  `test_vectors/vectors.h`. On Windows, run from PowerShell with MSYS2 gcc
+  and `SANITIZE=` (Git Bash's DLLs break gcc silently). Add a test here for
+  any new wire behavior.
+- **CEmu hardware tests** (`make hw-test`, local only: they need a ROM):
+  `canary`, `nodevice`, `handoff`. Each paints the screen green (pass) or
+  red with the failing line, so there's one CRC per test. Local ROMs are in
+  `C:\tools\CEmu\roms\`: `ti-84ce-v5.3.0.0037-base+clibs.rom` (Asm launch)
+  and `ti-84ce-v5.8.5.0074-jailbreak+clibs.rom` (arTIfiCE launch). Both
+  pass.
+  - On OS 5.5+ the runner picks the program from the PRGM menu by its first
+    letter, so test programs must sort before `TINCLIBC` (hence
+    `TAHANDOF`). A plain `Asm(` launch on 5.5+ gives ERROR: INVALID. That
+    was the cause of tinclib-config's CI failure with `ce-rom`.
+  - The autotester doesn't show the `0xFB0000` debug console. Debug via
+    the failure text on the verdict screen (the dump PNGs in
+    `tests/hw/build/`).
+- **`make size-check`** guards dead-code elimination (see above).
+
+## Workflow
+
+- Commits are authored by Gavin Smith only, `[dev] <summary>` style with a
+  bulleted body. **No `Co-Authored-By: Claude` / "Generated with Claude
+  Code" lines** in commits or PR bodies.
+- Work on a branch per phase (`phase-N`), then a PR titled
+  `[merge] vX.Y.Z from phase-N`. Tag `vX.Y.Z` (matching `TINC_VERSION`) to
+  draft a release.
+- When writing files from Python on this Windows machine, pass
+  `encoding="utf-8"`: the default is cp1252, and a failed write truncates
+  the file.
