@@ -39,7 +39,10 @@ jobs:
           cp $proto/protocol.h $proto/crc16.c $proto/crc16.h $proto/tinc_frame.c $proto/tinc_frame.h tinclib/src/
           cp LICENSE tinclib/LICENSE
           cp $proto/LICENSE tinclib/LICENSE-protocol
-          echo "tinclib-protocol $(git -C $proto describe --tags --always)" > tinclib/PROTOCOL_VERSION
+          # From protocol.h, not git describe: the shallow checkout has no submodule tags.
+          major=$(sed -n 's/^#define TINC_PROTO_MAJOR \([0-9]*\).*/\1/p' $proto/protocol.h)
+          minor=$(sed -n 's/^#define TINC_PROTO_MINOR \([0-9]*\).*/\1/p' $proto/protocol.h)
+          echo "tinclib-protocol v$major.$minor.0 ($(git -C $proto rev-parse --short HEAD))" > tinclib/PROTOCOL_VERSION
           zip -r "tinclib-$GITHUB_REF_NAME.zip" tinclib
 
       - name: Draft release
