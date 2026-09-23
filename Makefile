@@ -10,7 +10,7 @@ HWTESTS := $(addprefix hw_,$(notdir $(patsubst %/,%,$(dir $(wildcard tests/hw/*/
 
 PYTHON ?= python
 
-.PHONY: all clean hw-build hw-test hw-record size-check $(EXAMPLES) $(HWTESTS)
+.PHONY: all clean pc-link hw-build hw-test hw-record size-check $(EXAMPLES) $(HWTESTS)
 
 all: $(EXAMPLES)
 
@@ -32,6 +32,16 @@ hw-record:
 # tinc_init/tinc_isActive, size_full is the same program using everything.
 size-check: size_min size_full
 	$(PYTHON) tools/size_check.py bin/size_min/TINCSIZE.8xp bin/size_full/TINCFULL.8xp
+
+# The library on a Windows PC against a real board on a COM port (see
+# tools/pc_link.c). Needs a host gcc (MSYS2 on Windows, run from PowerShell).
+HOSTCC ?= gcc
+PROTO := external/tinclib-protocol
+
+pc-link:
+	$(PYTHON) -c "import os; os.makedirs('bin', exist_ok=True)"
+	$(HOSTCC) -std=c99 -Wall -Wextra -O1 -Itests/stubs -Isrc -I$(PROTO) -o bin/pc_link.exe \
+		tools/pc_link.c $(wildcard src/*.c) $(PROTO)/crc16.c $(PROTO)/tinc_frame.c
 
 # Removes all build output. Done here rather than with CEdev's clean, whose
 # Windows version silently fails on paths with '/' in them.
