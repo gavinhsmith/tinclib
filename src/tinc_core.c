@@ -268,6 +268,7 @@ const char *tinc_errString(tinc_err_t e)
     case TINC_ERR_BAD_OFFSET:         return "Body out of sync";
     case TINC_ERR_BAD_ARG:            return "Bad request";
     case TINC_ERR_UNSUPPORTED_SCHEME: return "Only http:// is supported";
+    case TINC_ERR_LOCKED:             return "Wi-Fi settings are locked";
     case TINC_ERR_WIFI_DOWN:          return "Wi-Fi not connected";
     case TINC_ERR_DNS:                return "Host not found";
     case TINC_ERR_CONNECT:            return "Could not connect";

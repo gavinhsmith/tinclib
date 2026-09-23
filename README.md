@@ -33,8 +33,10 @@ tinc_shutdown();
 - `tinc_openConfig()` sends the user to TINCLIBC. **Your program is unloaded
   and starts over from `main()` afterwards, so save your state first.**
   `tinc_init()` then tells you whether setup worked.
-- Protocol 0.1: plain `http://` GET only. HTTPS and POST come with later
-  protocol versions.
+- Protocol 0.2: plain `http://` GET only. HTTPS and POST come with later
+  protocol versions. The board's firmware must speak the same protocol
+  version (0.2): until 1.0, a mismatch fails `tinc_init()` with
+  `TINC_ERR_VERSION`.
 
 See `examples/hello/` for a complete program.
 

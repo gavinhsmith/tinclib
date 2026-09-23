@@ -84,6 +84,23 @@ static void test_golden_vectors(void)
     CHECK(fake.script_pos == fake.script_len);
 }
 
+/* 0.2: a STATUS with the Wi-Fi lock flag set still means online. */
+static void test_golden_locked_status(void)
+{
+    static const fake_step_t script[] = {
+        { tv_hello_req, sizeof tv_hello_req, tv_hello_resp, sizeof tv_hello_resp },
+        { tv_status_req, sizeof tv_status_req, tv_status_resp_locked, sizeof tv_status_resp_locked },
+    };
+
+    setup();
+    fake.script = script;
+    fake.script_len = sizeof script / sizeof script[0];
+    CHECK(tinc_init(NULL) == TINC_OK);
+    CHECK(tinc_isActive(TINC_WIFI));
+    CHECK(!fake.script_mismatch);
+    CHECK(fake.script_pos == fake.script_len);
+}
+
 static void test_no_device(void)
 {
     tinc_request_t req = get("http://x/");
@@ -113,9 +130,14 @@ static void test_is_active(void)
     CHECK(tinc_init(NULL) == TINC_OK);
     CHECK(tinc_isActive(TINC_WIFI));
 
+    /* A locked board is still online (0.2 STATUS flags byte). */
+    fake.wifi_locked = true;
+    CHECK(tinc_isActive(TINC_WIFI));
+    fake.wifi_locked = false;
+
     fake.wifi_state = TINC_WIFI_NO_CREDS;
     CHECK(!tinc_isActive(TINC_WIFI));
-    CHECK(fake.executed[TINC_T_STATUS] == 5);  /* answered at once */
+    CHECK(fake.executed[TINC_T_STATUS] == 6);  /* answered at once */
 
     /* Stuck connecting: gives up after about TINC_WIFI_WAIT_MS. */
     fake.wifi_connecting_polls = 255;
@@ -393,7 +415,7 @@ static void test_err_strings(void)
     static const tinc_err_t codes[] = {
         TINC_OK, TINC_ERR_UNSUPPORTED, TINC_ERR_NO_HELLO, TINC_ERR_VERSION, TINC_ERR_BAD_LEN,
         TINC_ERR_BUSY, TINC_ERR_BAD_STATE, TINC_ERR_BAD_OFFSET, TINC_ERR_BAD_ARG,
-        TINC_ERR_UNSUPPORTED_SCHEME, TINC_ERR_WIFI_DOWN, TINC_ERR_DNS, TINC_ERR_CONNECT,
+        TINC_ERR_UNSUPPORTED_SCHEME, TINC_ERR_LOCKED, TINC_ERR_WIFI_DOWN, TINC_ERR_DNS, TINC_ERR_CONNECT,
         TINC_ERR_TIMEOUT, TINC_ERR_HTTP_PROTO, TINC_ERR_TOO_MANY_REDIRECTS, TINC_ERR_NO_MEM,
         TINC_ERR_NO_DEVICE, TINC_ERR_NO_REPLY, TINC_ERR_ESP_RESET, TINC_ERR_NOT_INIT,
         TINC_ERR_UNSUPPORTED_METHOD, TINC_ERR_SETUP_CANCELLED, TINC_ERR_SETUP_FAILED,
@@ -416,6 +438,7 @@ static void test_err_strings(void)
 int main(void)
 {
     RUN(test_golden_vectors);
+    RUN(test_golden_locked_status);
     RUN(test_no_device);
     RUN(test_version_mismatch);
     RUN(test_is_active);

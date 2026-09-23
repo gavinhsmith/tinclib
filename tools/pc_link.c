@@ -252,8 +252,10 @@ int main(int argc, char **argv)
         const uint8_t *r = tinc_g.parser.payload;
         uint8_t w = r[TINC_STATUS_WIFI_STATE];
 
-        printf("STATUS: wifi %s, slot %d, rssi %d, ip %u.%u.%u.%u, free heap %lu\n",
-               w < 4 ? wifi[w] : "?", r[TINC_STATUS_SLOT] == TINC_SLOT_NONE ? -1 : r[TINC_STATUS_SLOT],
+        printf("STATUS: wifi %s%s, slot %d, rssi %d, ip %u.%u.%u.%u, free heap %lu\n",
+               w < 4 ? wifi[w] : "?",
+               r[TINC_STATUS_FLAGS] & TINC_STATUSF_WIFI_LOCKED ? " (locked)" : "",
+               r[TINC_STATUS_SLOT] == TINC_SLOT_NONE ? -1 : r[TINC_STATUS_SLOT],
                (int8_t)r[TINC_STATUS_RSSI], r[TINC_STATUS_IP], r[TINC_STATUS_IP + 1],
                r[TINC_STATUS_IP + 2], r[TINC_STATUS_IP + 3],
                (unsigned long)tinc_get_u32(r + TINC_STATUS_FREE_HEAP));

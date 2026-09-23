@@ -35,7 +35,7 @@
 extern "C" {
 #endif
 
-#define TINC_VERSION "0.1.0"
+#define TINC_VERSION "0.2.0"
 
 /**
  * Largest frame payload this side receives, and so the largest body chunk

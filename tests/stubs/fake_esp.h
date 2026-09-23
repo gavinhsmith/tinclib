@@ -22,6 +22,7 @@ typedef struct {
     uint8_t major, minor;    /* version it answers HELLO with */
     uint16_t max_payload;
     uint8_t wifi_state;
+    bool wifi_locked;        /* STATUS flags: TINC_STATUSF_WIFI_LOCKED */
     uint8_t wifi_connecting_polls; /* STATUS says CONNECTING this many times first */
     uint8_t req_polls;       /* REQ_STATUS says CONNECTING, then WAIT_HEADERS, this many times each */
     uint8_t req_err;         /* nonzero: request ends in ERROR with this */

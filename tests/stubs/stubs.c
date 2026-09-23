@@ -196,6 +196,7 @@ static void handle(const tinc_parser *p)
             out[TINC_STATUS_WIFI_STATE] = fake.wifi_state;
         }
         out[TINC_STATUS_REQ_STATE] = req_state();
+        out[TINC_STATUS_FLAGS] = fake.wifi_locked ? TINC_STATUSF_WIFI_LOCKED : 0;
         reply(0, p->type, p->seq, out, TINC_STATUS_RESP_LEN);
         break;
 

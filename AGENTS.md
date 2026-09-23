@@ -9,7 +9,7 @@ This is the library apps `#include`; it is **not** the config app
 those concerns out of this repo.
 
 Consumes `tinclib-protocol` as a pinned dependency: a git submodule at
-`external/tinclib-protocol`, currently on tag **`v0.1.0`**. It lives inside
+`external/tinclib-protocol`, currently on tag **`v0.2.0`**. It lives inside
 the repo root because CEdev on Windows can't build sources reached through
 `..`. **Never fork or hand-copy `protocol.h`/`crc16.c`.** If something needs
 a protocol change, that goes in `tinclib-protocol` first; then bump the
@@ -23,11 +23,19 @@ automatically. That's packaging, not a fork.
   everything protocol 0.1 allows: HELLO, STATUS, REQ_BEGIN (GET,
   `http://` only), REQ_STATUS, BODY_READ, REQ_ABORT, plus the TINCLIBC
   handoff.
+- **v0.2.0 (branch `phase-2`): protocol v0.2.0.** 0.2 only adds Wi-Fi admin
+  features (hidden networks in `WIFI_SET`/`WIFI_LIST`, and an ESP-side
+  Wi-Fi lock: the STATUS `flags` byte and `ERR_LOCKED`). The library sends
+  none of the admin commands, so the changes are the version, the
+  `ERR_LOCKED` string, and tests that a locked board still counts as
+  online. No API change: the lock isn't exposed, because apps don't need it
+  (TINCLIBC reads STATUS itself).
 - **Real firmware, from a PC:** `make pc-link` builds `tools/pc_link.c`
   (the real `src/`, with srldrvce swapped for Win32 serial) and runs it
   against a board on a COM port. Against the v0.1 firmware on COM5, HELLO,
   STATUS and a refused REQ_BEGIN (`WIFI_DOWN`) all work. A full GET is
-  untested until the board joins Wi-Fi: it reported `FAILED`.
+  untested until the board joins Wi-Fi: it reported `FAILED`. Since v0.2.0
+  the board needs 0.2 firmware, or HELLO fails with `ERR_VERSION`.
 - **Not yet run on a calculator with a board.** The board on COM5 uses a
   **CP210x** bridge, and srldrvce supports only CDC, FTDI and PL2303 (the
   CH340 boards aren't supported either), so a calculator won't see it.
@@ -117,7 +125,7 @@ camelCase after the `tinc_` prefix — e.g. `tinc_isActive`, `tinc_httpStatus`,
 not `tinc_IsActive` or `tinc_is_active`). Types: `tinc_snake_case_t`.
 Constants: `TINC_SCREAMING_CASE`.
 
-### Current shape (as implemented in v0.1.0; `src/tinclib.h` is authoritative)
+### Current shape (as implemented in v0.2.0; `src/tinclib.h` is authoritative)
 
 ```c
 typedef struct {
