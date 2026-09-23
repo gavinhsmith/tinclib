@@ -9,7 +9,7 @@ This is the library apps `#include`; it is **not** the config app
 those concerns out of this repo.
 
 Consumes `tinclib-protocol` as a pinned dependency: a git submodule at
-`external/tinclib-protocol`, currently on tag **`v0.2.0`**. It lives inside
+`external/tinclib-protocol`, currently on tag **`v0.3.0`**. It lives inside
 the repo root because CEdev on Windows can't build sources reached through
 `..`. **Never fork or hand-copy `protocol.h`/`crc16.c`.** If something needs
 a protocol change, that goes in `tinclib-protocol` first; then bump the
@@ -29,13 +29,22 @@ automatically. That's packaging, not a fork.
   none of the admin commands, so the changes are the version, the
   `ERR_LOCKED` string, and tests that a locked board still counts as
   online. No API change: the lock isn't exposed, because apps don't need it
-  (TINCLIBC reads STATUS itself).
+  (TINCLIBC reads STATUS itself). Released as tinclib v0.2.0.
+- **v0.3.0: protocol v0.3.0.** Again Wi-Fi admin only: the firmware sets
+  the number of Wi-Fi slots (HELLO appends `wifi_slots`), and `WIFI_LIST`
+  is replaced by the per-slot `WIFI_GET`. The library ignores the extra
+  HELLO byte (payloads are append-only), so the changes are the version and
+  the fake board's 11-byte HELLO. No API change.
+- Upstream moved the `v0.2.0` protocol tag (from `9c21d6e` to `1c008bc`)
+  after tinclib v0.2.0 shipped. The files are identical; only the history
+  was rewritten.
 - **Real firmware, from a PC:** `make pc-link` builds `tools/pc_link.c`
   (the real `src/`, with srldrvce swapped for Win32 serial) and runs it
   against a board on a COM port. Against the v0.1 firmware on COM5, HELLO,
   STATUS and a refused REQ_BEGIN (`WIFI_DOWN`) all work. A full GET is
-  untested until the board joins Wi-Fi: it reported `FAILED`. Since v0.2.0
-  the board needs 0.2 firmware, or HELLO fails with `ERR_VERSION`.
+  untested until the board joins Wi-Fi: it reported `FAILED`. The board
+  needs firmware on the same protocol version as the library (now 0.3), or
+  HELLO fails with `ERR_VERSION`.
 - **Not yet run on a calculator with a board.** The board on COM5 uses a
   **CP210x** bridge, and srldrvce supports only CDC, FTDI and PL2303 (the
   CH340 boards aren't supported either), so a calculator won't see it.
@@ -125,7 +134,7 @@ camelCase after the `tinc_` prefix — e.g. `tinc_isActive`, `tinc_httpStatus`,
 not `tinc_IsActive` or `tinc_is_active`). Types: `tinc_snake_case_t`.
 Constants: `TINC_SCREAMING_CASE`.
 
-### Current shape (as implemented in v0.2.0; `src/tinclib.h` is authoritative)
+### Current shape (as implemented in v0.3.0; `src/tinclib.h` is authoritative)
 
 ```c
 typedef struct {
