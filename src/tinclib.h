@@ -35,7 +35,18 @@
 extern "C" {
 #endif
 
-#define TINC_VERSION "0.3.0"
+/**
+ * Library version, MAJOR.MINOR.PATCH. MAJOR.MINOR is the protocol version
+ * from protocol.h, so the two can't drift apart: tinclib X.Y speaks protocol
+ * X.Y, and the board's firmware must too. PATCH counts library-only releases
+ * on the same protocol; reset it to 0 when the protocol submodule moves.
+ */
+#define TINC_VERSION_PATCH 0
+
+#define TINC_STR_(x) #x
+#define TINC_STR(x) TINC_STR_(x)
+#define TINC_VERSION \
+    TINC_STR(TINC_PROTO_MAJOR) "." TINC_STR(TINC_PROTO_MINOR) "." TINC_STR(TINC_VERSION_PATCH)
 
 /**
  * Largest frame payload this side receives, and so the largest body chunk

@@ -132,5 +132,8 @@ UBSan, then a CEdev build of the examples and hardware tests, then
 `make size-check`. The hardware tests need a ROM, so run them locally when you
 touch the link, timing or the handoff.
 
-Pushing a `vX.Y.Z` tag (matching `TINC_VERSION`) drafts a GitHub release with
+`TINC_VERSION` is built from the protocol version in `protocol.h`
+(MAJOR.MINOR) plus `TINC_VERSION_PATCH` in `src/tinclib.h`: moving the
+protocol submodule changes it, so reset the patch to 0 then, and bump the
+patch for library-only releases. Pushing a `vX.Y.Z` tag (matching `TINC_VERSION`) drafts a GitHub release with
 the library and the pinned protocol files zipped up.

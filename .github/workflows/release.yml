@@ -23,10 +23,15 @@ jobs:
         with:
           submodules: true
 
+      # TINC_VERSION is the protocol's MAJOR.MINOR plus TINC_VERSION_PATCH.
       - name: Check TINC_VERSION matches the tag
         run: |
-          if ! grep -q "^#define TINC_VERSION \"${GITHUB_REF_NAME#v}\"$" src/tinclib.h; then
-            echo "::error::TINC_VERSION in src/tinclib.h must be \"${GITHUB_REF_NAME#v}\" for tag $GITHUB_REF_NAME."
+          proto=external/tinclib-protocol/protocol.h
+          major=$(sed -n 's/^#define TINC_PROTO_MAJOR \([0-9]*\).*/\1/p' $proto)
+          minor=$(sed -n 's/^#define TINC_PROTO_MINOR \([0-9]*\).*/\1/p' $proto)
+          patch=$(sed -n 's/^#define TINC_VERSION_PATCH \([0-9]*\).*/\1/p' src/tinclib.h)
+          if [ "v$major.$minor.$patch" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match TINC_VERSION v$major.$minor.$patch (protocol $major.$minor, TINC_VERSION_PATCH $patch)."
             exit 1
           fi
 

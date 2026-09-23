@@ -61,7 +61,7 @@ automatically. That's packaging, not a fork.
 
 | File | What |
 |---|---|
-| `src/tinclib.h` | The whole public API, `TINC_VERSION`, tunables (`TINC_RX_BUF_SIZE`, `TINC_DEVICE_WAIT_MS`, `TINC_WIFI_WAIT_MS`) |
+| `src/tinclib.h` | The whole public API, `TINC_VERSION` (built from the protocol's MAJOR.MINOR + `TINC_VERSION_PATCH`), tunables (`TINC_RX_BUF_SIZE`, `TINC_DEVICE_WAIT_MS`, `TINC_WIFI_WAIT_MS`) |
 | `src/tinc_internal.h` | The single state struct `tinc_g`, `tinc_xfer()` and helpers |
 | `src/tinc_core.c` | USB/srldrvce, frames streamed out piece by piece (no TX buffer), stop-and-wait with same-SEQ retries, HELLO, re-handshake on `ERR_NO_HELLO`, `tinc_errString` |
 | `src/tinc_wifi.c` | `tinc_isActive` |
