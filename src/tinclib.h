@@ -170,6 +170,13 @@ const char *tinc_contentType(void);
 /** Why the last request ended in TINC_ERROR. */
 tinc_err_t tinc_error(void);
 
+/**
+ * More about a TLS failure: when tinc_error() is TINC_ERR_TLS or
+ * TINC_ERR_CERT, the board's reason, a TINC_TLSR_* code from protocol.h
+ * (TINC_TLSR_EXPIRED, TINC_TLSR_HOSTNAME, ...). 0 (TINC_TLSR_OTHER) otherwise.
+ */
+uint8_t tinc_errDetail(void);
+
 /** Short English description of an error code. */
 const char *tinc_errString(tinc_err_t e);
 

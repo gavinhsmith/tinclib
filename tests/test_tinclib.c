@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "fake_esp.h"
+#include "tinc_frame.h"
 #include "tinclib.h"
 #include "vectors.h"
 
@@ -120,8 +121,45 @@ static void test_golden_https_cert(void)
     CHECK(tinc_request(&req) == TINC_OK);
     CHECK(tinc_poll() == TINC_ERROR);
     CHECK(tinc_error() == TINC_ERR_CERT);
+    CHECK(tinc_errDetail() == TINC_TLSR_HOSTNAME);
     CHECK(!fake.script_mismatch);
     CHECK(fake.script_pos == fake.script_len);
+}
+
+/* The TLS reason can also come in a BODY_READ error reply. */
+static void test_err_detail_body_read(void)
+{
+    static const uint8_t err[] = { TINC_ERR_TLS, TINC_TLSR_ALERT };
+    static uint8_t body_err[TINC_OVERHEAD + sizeof err];
+    static fake_step_t script[] = {
+        { tv_hello_req, sizeof tv_hello_req, tv_hello_resp, sizeof tv_hello_resp },
+        { tv_status_req, sizeof tv_status_req, tv_status_resp, sizeof tv_status_resp },
+        { tv_req_begin_req, sizeof tv_req_begin_req, tv_req_begin_resp, sizeof tv_req_begin_resp },
+        { tv_req_status_req, sizeof tv_req_status_req, tv_req_status_resp, sizeof tv_req_status_resp },
+        { NULL, 0, body_err, sizeof body_err },
+    };
+    static const tinc_config_t cfg = { NULL, 0, TINC_CF_ASCII };
+    tinc_request_t req = { TINC_GET, "http://example.com/api?q=1", "Accept: application/json\r\n", NULL, 0 };
+
+    tinc_frame_encode(body_err, TINC_FLAG_RESP | TINC_FLAG_ERR, TINC_T_BODY_READ, 5, err, sizeof err);
+    setup();
+    fake.script = script;
+    fake.script_len = sizeof script / sizeof script[0];
+    CHECK(tinc_init(&cfg) == TINC_OK);
+    CHECK(tinc_isActive(TINC_WIFI));
+    CHECK(tinc_request(&req) == TINC_OK);
+    CHECK(tinc_poll() == TINC_ERROR);
+    CHECK(tinc_error() == TINC_ERR_TLS);
+    CHECK(tinc_errDetail() == TINC_TLSR_ALERT);
+    CHECK(!fake.script_mismatch);
+
+    /* Any other error clears it. */
+    setup();
+    fake.req_err = TINC_ERR_DNS;
+    CHECK(tinc_init(NULL) == TINC_OK);
+    CHECK(tinc_request(&req) == TINC_OK);
+    CHECK(tinc_poll() == TINC_ERROR);
+    CHECK(tinc_errDetail() == 0);
 }
 
 /* https goes through SECURING on its way to the body. */
@@ -514,6 +552,7 @@ int main(void)
     RUN(test_golden_vectors);
     RUN(test_golden_locked_status);
     RUN(test_golden_https_cert);
+    RUN(test_err_detail_body_read);
     RUN(test_https);
     RUN(test_no_device);
     RUN(test_version_mismatch);

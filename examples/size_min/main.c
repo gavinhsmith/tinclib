@@ -28,7 +28,7 @@ int main(void) {
                 tinc_read(buf, sizeof buf);
         os_PutStrFull(tinc_errString(tinc_error()));
         os_PutStrFull(tinc_contentType());
-        if (tinc_httpStatus())
+        if (tinc_httpStatus() || tinc_errDetail())
             tinc_abort();
     }
 #endif

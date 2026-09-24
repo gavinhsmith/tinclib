@@ -9,6 +9,7 @@ void tinc_endRequest(uint8_t state, tinc_err_t err)
     tinc_g.active = false;
     tinc_g.state = state;
     tinc_g.err = err;
+    tinc_g.err_detail = 0;
     tinc_g.chunk_len = tinc_g.chunk_pos = 0;
 }
 
@@ -102,7 +103,10 @@ static void poll_status(void)
         tinc_g.state = TINC_BODY;
         break;
     case TINC_RS_ERROR:
+        n = r[TINC_RSTAT_CTYPE_LEN];
         tinc_endRequest(TINC_ERROR, r[TINC_RSTAT_ERR] ? r[TINC_RSTAT_ERR] : TINC_ERR_BAD_STATE);
+        if (tinc_g.parser.len > TINC_RSTAT_CTYPE + (uint16_t)n)
+            tinc_g.err_detail = r[TINC_RSTAT_CTYPE + n];
         break;
     default:                       /* IDLE: the board dropped it */
         tinc_endRequest(TINC_ERROR, TINC_ERR_BAD_STATE);
@@ -131,6 +135,9 @@ static void read_body(void)
         err = TINC_ERR_BAD_OFFSET;
     if (err != TINC_OK) {
         tinc_endRequest(TINC_ERROR, err);
+        /* Only these two come with a detail, so r is their error reply. */
+        if ((err == TINC_ERR_TLS || err == TINC_ERR_CERT) && tinc_g.parser.len > 1)
+            tinc_g.err_detail = r[1];
         return;
     }
 
@@ -182,6 +189,11 @@ const char *tinc_contentType(void)
 tinc_err_t tinc_error(void)
 {
     return tinc_g.err;
+}
+
+uint8_t tinc_errDetail(void)
+{
+    return tinc_g.err_detail;
 }
 
 void tinc_abort(void)

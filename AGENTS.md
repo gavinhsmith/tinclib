@@ -40,9 +40,9 @@ automatically. That's packaging, not a fork.
   `TINC_SECURING`, so the changes are the version, `tinc_errString` for
   `ERR_TLS`/`ERR_CERT`/`ERR_TIME`/`ERR_REDIRECT_DOWNGRADE`, and tests (the
   fake board reports `TLS` for https and appends `err_detail` to
-  REQ_STATUS). No API change: the TLS reason (`err_detail`,
-  `TINC_TLSR_*`) is ignored; a `tinc_errDetail()` would be the way to
-  expose it if apps need it.
+  REQ_STATUS). One API addition: `tinc_errDetail()` returns the TLS
+  reason (`err_detail`, a `TINC_TLSR_*` code) for `ERR_TLS`/`ERR_CERT`,
+  taken from REQ_STATUS or a BODY_READ error reply; 0 otherwise.
 - Upstream moved the `v0.2.0` protocol tag (from `9c21d6e` to `1c008bc`)
   after tinclib v0.2.0 shipped. The files are identical; only the history
   was rewritten.
@@ -110,8 +110,8 @@ model is:
 - Rely on the linker discarding unused functions/data so a program that
   only uses a few features doesn't pay for the whole library. **Verified**
   with CEdev v15 (LTO, `-Oz`): `examples/size_min` built with only
-  `tinc_init`/`tinc_isActive` is 4,013 bytes, and the same program using
-  the whole API is 8,203 bytes. `make size-check` (in CI) fails if the gap
+  `tinc_init`/`tinc_isActive` is 4,033 bytes, and the same program using
+  the whole API is 8,367 bytes. `make size-check` (in CI) fails if the gap
   drops below 2,000 bytes.
 - Split source by feature (core/framing, Wi-Fi status, HTTP request
   handling) so optional pieces stay separable even without perfect dead-code
@@ -169,6 +169,7 @@ int16_t      tinc_read(void *buf, uint16_t cap);        /* bytes read, 0 = nothi
 uint16_t     tinc_httpStatus(void);
 const char  *tinc_contentType(void);
 tinc_err_t   tinc_error(void);
+uint8_t      tinc_errDetail(void);                  /* TINC_TLSR_* for ERR_TLS/ERR_CERT, else 0 */
 const char  *tinc_errString(tinc_err_t e);
 void         tinc_abort(void);
 

@@ -45,6 +45,7 @@ typedef struct {
     bool active;             /* the board holds it; tinc_poll() drives it */
     uint8_t state;           /* tinc_state_t */
     tinc_err_t err;
+    uint8_t err_detail;      /* TINC_TLSR_* for ERR_TLS / ERR_CERT, else 0 */
     uint16_t http_status;
     char ctype[TINC_CTYPE_MAX + 1];
     uint32_t offset;         /* next BODY_READ offset */
