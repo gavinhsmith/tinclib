@@ -75,6 +75,7 @@ automatically. That's packaging, not a fork.
 | `src/tinc_wifi.c` | `tinc_isActive` |
 | `src/tinc_http.c` | The one request: begin, poll, read, abort |
 | `src/tinc_config.c` | `tinc_openConfig`, TINCHND layout, setup-result pickup |
+| `src/tinclib.hpp` | C++ bindings, header only: the same calls in `namespace tinc`, enum classes, `tinc::Session` (init/shutdown by scope) |
 
 ## Toolchain
 
@@ -289,6 +290,20 @@ Key properties to preserve:
     the failure text on the verdict screen (the dump PNGs in
     `tests/hw/build/`).
 - **`make size-check`** guards dead-code elimination (see above).
+- **C++ bindings:** `tests/test_cpp.cpp` (built with `-fno-exceptions
+  -fno-rtti`, like CEdev) runs the wrappers against the fake board, and
+  `make size_cpp` builds `examples/size_min/main.cpp` with CEdev. The
+  bindings cost 16 bytes over calling the C API from C++ (8,401 vs 8,385).
+
+## C++ bindings
+
+`src/tinclib.hpp` wraps the C API one to one and must stay that way: every
+call is an inline forward, no exceptions (CEdev builds C++ with
+`-fno-exceptions`), no `std::string` or other allocation. **No request
+object**: it would bring back the request handle and suggest several
+requests at once. The only class is `tinc::Session`, a scope guard for
+`tinc_init`/`tinc_shutdown`. A new C function gets its `tinc::` forward in
+the same change.
 
 ## Workflow
 

@@ -40,7 +40,7 @@ jobs:
         run: |
           proto=external/tinclib-protocol
           mkdir -p tinclib/src
-          cp src/*.c src/*.h tinclib/src/
+          cp src/*.c src/*.h src/*.hpp tinclib/src/
           cp $proto/protocol.h $proto/crc16.c $proto/crc16.h $proto/tinc_frame.c $proto/tinc_frame.h tinclib/src/
           cp LICENSE tinclib/LICENSE
           cp $proto/LICENSE tinclib/LICENSE-protocol
@@ -65,7 +65,7 @@ jobs:
              EXTRA_C_SOURCES = \$(wildcard lib/tinclib/src/*.c)
              \`\`\`
 
-          3. \`#include "tinclib.h"\` and build with \`make\`.
+          3. \`#include "tinclib.h"\` and build with \`make\`. From C++, \`#include "tinclib.hpp"\` for the \`tinc::\` bindings, and add \`-Ilib/tinclib/src\` to \`CXXFLAGS\` too.
 
           Keep the library inside your project directory: on Windows, CEdev can't build sources reached through \`..\`. The calculator needs the [CE C libraries](https://github.com/CE-Programming/libraries/releases) (usbdrvce, srldrvce, fileioc), an ESP8266 board running tinclib-firmware, and TINCLIBC for Wi-Fi setup.
           NOTES
