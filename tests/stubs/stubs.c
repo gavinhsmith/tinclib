@@ -75,7 +75,7 @@ static uint8_t req_state(void)
     if (!esp.active)
         return TINC_RS_IDLE;
     if (esp.polls < fake.req_polls)
-        return TINC_RS_CONNECTING;
+        return strncmp(fake.url, "https:", 6) == 0 ? TINC_RS_TLS : TINC_RS_CONNECTING;
     if (fake.req_err)
         return TINC_RS_ERROR;
     if (esp.polls < 2 * fake.req_polls)
@@ -240,9 +240,10 @@ static void handle(const tinc_parser *p)
             out[TINC_RSTAT_CTYPE_LEN] = (uint8_t)strlen(ct);
             memcpy(out + TINC_RSTAT_CTYPE, ct, strlen(ct));
         }
+        out[TINC_RSTAT_CTYPE + out[TINC_RSTAT_CTYPE_LEN]] = 0;   /* err_detail */
         if (esp.active)
             esp.polls++;
-        reply(0, p->type, p->seq, out, (uint16_t)(TINC_RSTAT_CTYPE + out[TINC_RSTAT_CTYPE_LEN]));
+        reply(0, p->type, p->seq, out, (uint16_t)(TINC_RSTAT_CTYPE + out[TINC_RSTAT_CTYPE_LEN] + 1));
         break;
     }
 

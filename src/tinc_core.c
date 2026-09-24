@@ -267,7 +267,7 @@ const char *tinc_errString(tinc_err_t e)
     case TINC_ERR_BAD_STATE:          return "Request lost";
     case TINC_ERR_BAD_OFFSET:         return "Body out of sync";
     case TINC_ERR_BAD_ARG:            return "Bad request";
-    case TINC_ERR_UNSUPPORTED_SCHEME: return "Only http:// is supported";
+    case TINC_ERR_UNSUPPORTED_SCHEME: return "Only http:// and https:// are supported";
     case TINC_ERR_LOCKED:             return "Wi-Fi settings are locked";
     case TINC_ERR_WIFI_DOWN:          return "Wi-Fi not connected";
     case TINC_ERR_DNS:                return "Host not found";
@@ -276,6 +276,10 @@ const char *tinc_errString(tinc_err_t e)
     case TINC_ERR_HTTP_PROTO:         return "Bad HTTP response";
     case TINC_ERR_TOO_MANY_REDIRECTS: return "Too many redirects";
     case TINC_ERR_NO_MEM:             return "Board out of memory";
+    case TINC_ERR_TLS:                return "Secure connection failed";
+    case TINC_ERR_CERT:               return "Certificate rejected";
+    case TINC_ERR_TIME:               return "Board clock not set";
+    case TINC_ERR_REDIRECT_DOWNGRADE: return "Redirect from https to http";
     case TINC_ERR_NO_DEVICE:          return "No board connected";
     case TINC_ERR_NO_REPLY:           return "Board not responding";
     case TINC_ERR_ESP_RESET:          return "Board reset";

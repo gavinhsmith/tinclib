@@ -105,7 +105,7 @@ typedef enum {
 typedef enum {
     TINC_IDLE = 0,         /**< no request */
     TINC_CONNECTING,
-    TINC_SECURING,         /**< TLS handshake (not before HTTPS support) */
+    TINC_SECURING,         /**< https: board waits for its clock, then the TLS handshake */
     TINC_WAITING,          /**< sent, waiting for the response headers */
     TINC_BODY,             /**< tinc_read() the body; status and type are valid */
     TINC_DONE,             /**< whole body read; the request is released */
@@ -134,7 +134,7 @@ void tinc_shutdown(void);
 
 typedef struct {
     tinc_method_t method;
-    const char   *url;       /**< "http://..." (no https yet) */
+    const char   *url;       /**< "http://..." or "https://..." (certificates always verified) */
     const char   *headers;   /**< raw "Name: value\r\n..." or NULL */
     /**
      * Request body. NOT COPIED: it is streamed out from this pointer during

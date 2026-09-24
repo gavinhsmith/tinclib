@@ -25,7 +25,7 @@ tinc_err_t tinc_request(const tinc_request_t *req)
         return TINC_ERR_BUSY;
     if (!req || !req->url)
         return TINC_ERR_BAD_ARG;
-    /* POST needs BODY_WRITE, which the protocol doesn't have yet (0.3). */
+    /* POST needs BODY_WRITE, which the protocol doesn't have yet (0.4). */
     if (req->method != TINC_GET)
         return TINC_ERR_UNSUPPORTED_METHOD;
 

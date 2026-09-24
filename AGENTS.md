@@ -9,7 +9,7 @@ This is the library apps `#include`; it is **not** the config app
 those concerns out of this repo.
 
 Consumes `tinclib-protocol` as a pinned dependency: a git submodule at
-`external/tinclib-protocol`, currently on tag **`v0.3.0`**. It lives inside
+`external/tinclib-protocol`, currently on tag **`v0.4.0`**. It lives inside
 the repo root because CEdev on Windows can't build sources reached through
 `..`. **Never fork or hand-copy `protocol.h`/`crc16.c`.** If something needs
 a protocol change, that goes in `tinclib-protocol` first; then bump the
@@ -35,6 +35,14 @@ automatically. That's packaging, not a fork.
   is replaced by the per-slot `WIFI_GET`. The library ignores the extra
   HELLO byte (payloads are append-only), so the changes are the version and
   the fake board's 11-byte HELLO. No API change.
+- **v0.4.0 (branch `phase-4`): protocol v0.4.0, HTTPS.** The library
+  already passed `https://` URLs through and mapped `TLS` to
+  `TINC_SECURING`, so the changes are the version, `tinc_errString` for
+  `ERR_TLS`/`ERR_CERT`/`ERR_TIME`/`ERR_REDIRECT_DOWNGRADE`, and tests (the
+  fake board reports `TLS` for https and appends `err_detail` to
+  REQ_STATUS). No API change: the TLS reason (`err_detail`,
+  `TINC_TLSR_*`) is ignored; a `tinc_errDetail()` would be the way to
+  expose it if apps need it.
 - Upstream moved the `v0.2.0` protocol tag (from `9c21d6e` to `1c008bc`)
   after tinclib v0.2.0 shipped. The files are identical; only the history
   was rewritten.
@@ -43,14 +51,14 @@ automatically. That's packaging, not a fork.
   against a board on a COM port. Against the v0.1 firmware on COM5, HELLO,
   STATUS and a refused REQ_BEGIN (`WIFI_DOWN`) all work. A full GET is
   untested until the board joins Wi-Fi: it reported `FAILED`. The board
-  needs firmware on the same protocol version as the library (now 0.3), or
+  needs firmware on the same protocol version as the library (now 0.4), or
   HELLO fails with `ERR_VERSION`.
 - **Not yet run on a calculator with a board.** The board on COM5 uses a
   **CP210x** bridge, and srldrvce supports only CDC, FTDI and PL2303 (the
   CH340 boards aren't supported either), so a calculator won't see it.
   Needs an FTDI/PL2303 adapter on the ESP's UART, or a native-USB chip:
   a hardware decision for the user.
-- POST (`BODY_WRITE`), HTTPS (`TINC_SECURING`/TLS), `HDR_GET` and the BOOT
+- POST (`BODY_WRITE`), the `INSECURE` request flag, `HDR_GET` and the BOOT
   event are all waiting on the protocol. When they land there, add them
   here. POST currently returns `TINC_ERR_UNSUPPORTED_METHOD`.
 - Cross-repo follow-up: tinclib-config must **exit** when done instead of
@@ -103,7 +111,7 @@ model is:
   only uses a few features doesn't pay for the whole library. **Verified**
   with CEdev v15 (LTO, `-Oz`): `examples/size_min` built with only
   `tinc_init`/`tinc_isActive` is 4,013 bytes, and the same program using
-  the whole API is 8,017 bytes. `make size-check` (in CI) fails if the gap
+  the whole API is 8,203 bytes. `make size-check` (in CI) fails if the gap
   drops below 2,000 bytes.
 - Split source by feature (core/framing, Wi-Fi status, HTTP request
   handling) so optional pieces stay separable even without perfect dead-code
@@ -134,7 +142,7 @@ camelCase after the `tinc_` prefix — e.g. `tinc_isActive`, `tinc_httpStatus`,
 not `tinc_IsActive` or `tinc_is_active`). Types: `tinc_snake_case_t`.
 Constants: `TINC_SCREAMING_CASE`.
 
-### Current shape (as implemented in v0.3.0; `src/tinclib.h` is authoritative)
+### Current shape (as implemented in v0.4.0; `src/tinclib.h` is authoritative)
 
 ```c
 typedef struct {
