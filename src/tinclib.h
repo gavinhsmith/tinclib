@@ -41,7 +41,7 @@ extern "C" {
  * X.Y, and the board's firmware must too. PATCH counts library-only releases
  * on the same protocol; reset it to 0 when the protocol submodule moves.
  */
-#define TINC_VERSION_PATCH 1
+#define TINC_VERSION_PATCH 0
 
 #define TINC_STR_(x) #x
 #define TINC_STR(x) TINC_STR_(x)
@@ -81,7 +81,7 @@ enum {
     TINC_ERR_NO_REPLY           = 0x81, /**< the board stopped answering */
     TINC_ERR_ESP_RESET          = 0x82, /**< the board reset mid-request; not resent */
     TINC_ERR_NOT_INIT           = 0x83, /**< tinc_init() hasn't succeeded */
-    TINC_ERR_UNSUPPORTED_METHOD = 0x84, /**< POST needs a newer protocol */
+    TINC_ERR_UNSUPPORTED_METHOD = 0x84, /**< not a tinc_method_t */
     TINC_ERR_SETUP_CANCELLED    = 0x85, /**< tinc_init(): the user backed out of TINCLIBC */
     TINC_ERR_SETUP_FAILED       = 0x86, /**< tinc_init(): TINCLIBC couldn't set up Wi-Fi */
     TINC_ERR_NO_CONFIG_APP      = 0x87  /**< tinc_openConfig(): TINCLIBC isn't installed */
@@ -102,13 +102,18 @@ typedef enum {
 
 typedef enum {
     TINC_GET = 1,
-    TINC_POST = 2          /**< not supported yet: TINC_ERR_UNSUPPORTED_METHOD */
+    TINC_POST,
+    TINC_PUT,
+    TINC_DELETE,
+    TINC_PATCH,
+    TINC_HEAD              /**< may go straight to TINC_DONE; status and headers still valid */
 } tinc_method_t;
 
 typedef enum {
     TINC_IDLE = 0,         /**< no request */
     TINC_CONNECTING,
     TINC_SECURING,         /**< https: board waits for its clock, then the TLS handshake */
+    TINC_SENDING,          /**< uploading the request body */
     TINC_WAITING,          /**< sent, waiting for the response headers */
     TINC_BODY,             /**< tinc_read() the body; status and type are valid */
     TINC_DONE,             /**< whole body read; the request is released */
@@ -140,9 +145,11 @@ typedef struct {
     const char   *url;       /**< "http://..." or "https://..." (certificates always verified) */
     const char   *headers;   /**< raw "Name: value\r\n..." or NULL */
     /**
-     * Request body. NOT COPIED: it is streamed out from this pointer during
-     * tinc_poll(), so it must stay valid and unchanged until the state
-     * reaches TINC_BODY (or the request ends).
+     * Request body for POST/PUT/PATCH/DELETE; must be empty for GET and HEAD.
+     * NOT COPIED: it is streamed out from this pointer during tinc_poll(),
+     * so it must stay valid and unchanged until the state reaches TINC_BODY
+     * (or the request ends). The board adds Host and Content-Length; don't
+     * put those (or Transfer-Encoding, Expect) in headers.
      */
     const void   *body;
     uint16_t      bodyLen;
@@ -169,6 +176,14 @@ uint16_t tinc_httpStatus(void);
 
 /** Content-Type, once the state reached TINC_BODY; "" before. */
 const char *tinc_contentType(void);
+
+/**
+ * Copies the response header name (any case) into out as a string, cut to
+ * fit cap. Returns the value's full length, or -1 when the response has no
+ * such header or the state isn't TINC_BODY/TINC_DONE. Only GET and HEAD
+ * follow redirects; for the other methods read "Location" from the 3xx.
+ */
+int16_t tinc_header(const char *name, char *out, uint16_t cap);
 
 /** Why the last request ended in TINC_ERROR. */
 tinc_err_t tinc_error(void);

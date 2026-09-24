@@ -15,7 +15,7 @@ int main() {
     {
         tinc::Session net;
         bool online = net.err() == tinc::Ok && tinc::isActive();
-        static const tinc_request_t req = { TINC_GET, "http://example.com/", NULL, NULL, 0 };
+        static const tinc_request_t req = { TINC_POST, "http://example.com/", NULL, "a", 1 };
         char buf[16];
 
         os_ClrHome();
@@ -27,7 +27,7 @@ int main() {
                 tinc::read(buf);
         os_PutStrFull(tinc::errString(tinc::error()));
         os_PutStrFull(tinc::contentType());
-        if (tinc::httpStatus() || tinc::errDetail())
+        if (tinc::httpStatus() || tinc::errDetail() || tinc::header("Location", buf) > 0)
             tinc::abort();
     }
     while (!os_GetCSC()) {

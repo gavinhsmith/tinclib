@@ -21,6 +21,9 @@
 /* BODY_READ long-poll: bounds how long one tinc_poll() can block. */
 #define TINC_BODY_WAIT_MS 50u
 
+/* BODY_WRITE: how long the board may hold a write for send-buffer room. */
+#define TINC_UPLOAD_WAIT_MS 100u
+
 /* One piece of an outgoing payload; xfer() sends up to three back to back. */
 typedef struct {
     const void *p;
@@ -37,8 +40,8 @@ typedef struct {
     clock_t last_byte;       /* clock() of the last received byte */
     /* ponytail: one buffer for frames and the pre-fetched body chunk; fine
      * while nothing else is exchanged with a chunk pending (tinc_isActive
-     * skips its STATUS then). Split it if POST streaming needs traffic
-     * alongside a pending chunk. */
+     * skips its STATUS then, tinc_header re-reads the chunk after). Uploads
+     * finish before the body starts. Split it if that ever changes. */
     uint8_t frame[TINC_FRAME_BUF(TINC_RX_BUF_SIZE)];
 
     /* the one request */
@@ -48,6 +51,9 @@ typedef struct {
     uint8_t err_detail;      /* TINC_TLSR_* for ERR_TLS / ERR_CERT, else 0 */
     uint16_t http_status;
     char ctype[TINC_CTYPE_MAX + 1];
+    const uint8_t *body;     /* the app's request body, streamed by BODY_WRITE */
+    uint16_t body_len;       /* 0 once the upload is over */
+    uint16_t body_sent;      /* bytes the board has taken */
     uint32_t offset;         /* next BODY_READ offset */
     const uint8_t *chunk;    /* pre-fetched body, inside frame[] */
     uint16_t chunk_len, chunk_pos;
