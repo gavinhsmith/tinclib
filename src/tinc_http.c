@@ -12,6 +12,7 @@ void tinc_endRequest(uint8_t state, tinc_err_t err)
     tinc_g.err_detail = 0;
     tinc_g.chunk_len = tinc_g.chunk_pos = 0;
     tinc_g.body_len = 0;
+    tinc_g.tls_wait = false;
 }
 
 /* Ends the request on an error reply, keeping a TLS failure's reason. */
@@ -61,6 +62,9 @@ tinc_err_t tinc_request(const tinc_request_t *req)
     tinc_g.ctype[0] = '\0';
     tinc_g.offset = 0;
     tinc_g.eof = false;
+    /* One TLS crypto step can stall the board, and we can't see when it
+     * enters TLS: wait longer for every reply until it's past TLS. */
+    tinc_g.tls_wait = strncmp(req->url, "https:", 6) == 0;
 
     err = tinc_xfer(TINC_T_REQ_BEGIN, pieces, 3, 0);
     if (err != TINC_OK) {
@@ -109,6 +113,8 @@ static void write_body(void)
         return;
     }
 
+    if (next)
+        tinc_g.tls_wait = false;   /* taking bytes: past TLS */
     tinc_g.body_sent = (uint16_t)next;
     /* RESPONDED: the server answered early (401, 413...); read that. */
     if (next == tinc_g.body_len || (r[TINC_WRITE_FLAGS] & TINC_WRITEF_RESPONDED)) {
@@ -134,6 +140,8 @@ static void poll_status(void)
     }
 
     r = tinc_g.parser.payload;
+    if (r[TINC_RSTAT_STATE] >= TINC_RS_SENDING)
+        tinc_g.tls_wait = false;
     switch (r[TINC_RSTAT_STATE]) {
     case TINC_RS_CONNECTING:
         tinc_g.state = TINC_CONNECTING;
@@ -305,9 +313,12 @@ uint8_t tinc_errDetail(void)
 
 void tinc_abort(void)
 {
-    bool was_active = tinc_g.active;
+    bool was_active = tinc_g.active, tls_wait = tinc_g.tls_wait;
 
     tinc_endRequest(TINC_IDLE, TINC_OK);
-    if (was_active)
+    if (was_active) {
+        tinc_g.tls_wait = tls_wait;   /* the abort may wait out a TLS step */
         tinc_xfer(TINC_T_REQ_ABORT, NULL, 0, 0);
+        tinc_g.tls_wait = false;
+    }
 }

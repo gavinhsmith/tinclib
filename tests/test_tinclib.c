@@ -264,6 +264,48 @@ static void test_header(void)
     CHECK(tinc_header("Location", out, sizeof out) == 300);  /* DONE still has it */
 }
 
+/* 0.6: while an https request may be in TLS the board can take up to
+ * TINC_REPLY_TIMEOUT_TLS_MS to answer. Past TLS, and for http, the usual
+ * timeout applies. */
+static void test_tls_stall(void)
+{
+    char body[8];
+    tinc_request_t https = get("https://x/"), http = get("http://x/");
+    unsigned long start;
+    uint16_t frames;
+
+    setup();
+    fake.req_polls = 2;
+    fake.tls_stall_ms = 800;
+    fake.body = "ok";
+    CHECK(tinc_init(NULL) == TINC_OK);
+    frames = fake.frames_in;
+    CHECK(tinc_request(&https) == TINC_OK);       /* its reply stalls too */
+    CHECK(tinc_poll() == TINC_SECURING);
+    CHECK(fake.frames_in == frames + 2);           /* no resends */
+    CHECK(tinc_poll() == TINC_SECURING);
+    CHECK(tinc_poll() == TINC_WAITING);
+    fake.drop_replies = 255;                       /* past TLS: short timeout */
+    start = fake_now;
+    CHECK(tinc_poll() == TINC_ERROR);
+    CHECK(tinc_error() == TINC_ERR_NO_REPLY);
+    CHECK((fake_now - start) / 1000 < TINC_REPLY_TIMEOUT_TLS_MS);
+
+    setup();
+    fake.req_polls = 2;
+    fake.tls_stall_ms = 800;
+    fake.body = "ok";
+    CHECK(tinc_init(NULL) == TINC_OK);
+    CHECK(tinc_request(&https) == TINC_OK);
+    CHECK(run(body, sizeof body, 8) == TINC_DONE);
+    CHECK(strcmp(body, "ok") == 0);
+
+    fake.drop_replies = 255;                       /* http never waits longer */
+    start = fake_now;
+    CHECK(tinc_request(&http) == TINC_ERR_NO_REPLY);
+    CHECK((fake_now - start) / 1000 < TINC_REPLY_TIMEOUT_TLS_MS);
+}
+
 /* The TLS reason can also come in a BODY_READ error reply. */
 static void test_err_detail_body_read(void)
 {
@@ -723,6 +765,7 @@ int main(void)
     RUN(test_last_chunk_held_until_read);
     RUN(test_is_active_mid_chunk);
     RUN(test_lost_reply_is_not_rerun);
+    RUN(test_tls_stall);
     RUN(test_golden_post);
     RUN(test_post_upload);
     RUN(test_post_responded);
