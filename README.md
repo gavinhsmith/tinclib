@@ -33,13 +33,13 @@ tinc_shutdown();
 - `tinc_openConfig()` sends the user to TINCLIBC. **Your program is unloaded
   and starts over from `main()` afterwards, so save your state first.**
   `tinc_init()` then tells you whether setup worked.
-- Protocol 0.5: GET, POST, PUT, PATCH, DELETE and HEAD over `http://` or
+- Protocol 0.6: GET, POST, PUT, PATCH, DELETE and HEAD over `http://` or
   `https://`. A request body is streamed from your buffer, not copied, so
   keep it untouched until the state reaches `TINC_BODY`.
   `tinc_header()` reads a response header (e.g. `Location`). HTTPS
   certificates are always checked against CA roots built into the board's
   firmware (TLS 1.2 at most). The board's firmware must speak the same
-  protocol version (0.5): until 1.0, a mismatch fails `tinc_init()` with
+  protocol version (0.6): until 1.0, a mismatch fails `tinc_init()` with
   `TINC_ERR_VERSION`.
 
 See `examples/hello/` for a complete program.

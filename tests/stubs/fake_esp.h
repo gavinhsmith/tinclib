@@ -32,6 +32,7 @@ typedef struct {
     uint16_t chunk_max;      /* 0 = as much as max_len allows */
     uint8_t empty_reads;     /* BODY_READs answered empty before the data */
     uint8_t drop_replies;    /* the next N replies are "lost" (not sent) */
+    uint16_t tls_stall_ms;   /* replies take this long while the request is in TLS */
     uint16_t write_max;      /* BODY_WRITE takes at most this much, 0 = all offered */
     bool respond_early;      /* the server answers after the first bytes of upload */
     const char *hdr_name;    /* the one response header HDR_GET knows (exact case) */

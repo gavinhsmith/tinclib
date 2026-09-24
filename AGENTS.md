@@ -9,8 +9,8 @@ This is the library apps `#include`; it is **not** the config app
 those concerns out of this repo.
 
 Consumes `tinclib-protocol` as a pinned dependency: a git submodule at
-`external/tinclib-protocol`, currently on tag **`v0.5`** (`8e25875`; upstream has no
-`v0.5.0` tag yet, despite its CHANGELOG saying `vMAJOR.MINOR.0`). It lives inside
+`external/tinclib-protocol`, currently on tag **`v0.6`** (`fde44be`). Upstream tags
+`vMAJOR.MINOR` from 0.5 on; `v0.1.0`-`v0.4.0` are aliases for older pins. It lives inside
 the repo root because CEdev on Windows can't build sources reached through
 `..`. **Never fork or hand-copy `protocol.h`/`crc16.c`.** If something needs
 a protocol change, that goes in `tinclib-protocol` first; then bump the
@@ -68,12 +68,19 @@ automatically. That's packaging, not a fork.
   the shared frame buffer, so a pending body chunk is fetched again (same
   offset re-delivers it). Not used: `INFO` (display only, TINCLIBC's job),
   `HDR_GET`'s `index` (always 0) and `TRUNC` flag.
+- **v0.6.0 (branch `phase-6`): protocol v0.6, TLS stall allowance.** One
+  TLS crypto step can stall the ESP for several hundred ms, so for an
+  https request every reply timeout is `TINC_REPLY_TIMEOUT_TLS_MS` (1000)
+  instead of 200, from REQ_BEGIN until a REQ_STATUS state >= `SENDING` or a
+  BODY_WRITE that took bytes (`tinc_g.tls_wait`). A `tinc_abort()` in that
+  window keeps the long timeout. http never uses it. URL scheme match is
+  lowercase `https:` only.
 - **Real firmware, from a PC:** `make pc-link` builds `tools/pc_link.c`
   (the real `src/`, with srldrvce swapped for Win32 serial) and runs it
   against a board on a COM port. Against the v0.1 firmware on COM5, HELLO,
   STATUS and a refused REQ_BEGIN (`WIFI_DOWN`) all work. A full GET is
   untested until the board joins Wi-Fi: it reported `FAILED`. The board
-  needs firmware on the same protocol version as the library (now 0.5), or
+  needs firmware on the same protocol version as the library (now 0.6), or
   HELLO fails with `ERR_VERSION`.
 - **Not yet run on a calculator with a board.** The board on COM5 uses a
   **CP210x** bridge, and srldrvce supports only CDC, FTDI and PL2303 (the
@@ -133,8 +140,8 @@ model is:
 - Rely on the linker discarding unused functions/data so a program that
   only uses a few features doesn't pay for the whole library. **Verified**
   with CEdev v15 (LTO, `-Oz`): `examples/size_min` built with only
-  `tinc_init`/`tinc_isActive` is 4,047 bytes, and the same program using
-  the whole API (POST and `tinc_header` included) is 9,791 bytes. `make size-check` (in CI) fails if the gap
+  `tinc_init`/`tinc_isActive` is 4,135 bytes, and the same program using
+  the whole API (POST and `tinc_header` included) is 10,030 bytes. `make size-check` (in CI) fails if the gap
   drops below 2,000 bytes.
 - Split source by feature (core/framing, Wi-Fi status, HTTP request
   handling) so optional pieces stay separable even without perfect dead-code
@@ -166,7 +173,7 @@ camelCase after the `tinc_` prefix — e.g. `tinc_isActive`, `tinc_httpStatus`,
 not `tinc_IsActive` or `tinc_is_active`). Types: `tinc_snake_case_t`.
 Constants: `TINC_SCREAMING_CASE`.
 
-### Current shape (as implemented in v0.5.0; `src/tinclib.h` is authoritative)
+### Current shape (as implemented in v0.6.0; `src/tinclib.h` is authoritative)
 
 ```c
 typedef struct {

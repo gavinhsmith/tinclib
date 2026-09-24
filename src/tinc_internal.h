@@ -46,6 +46,7 @@ typedef struct {
 
     /* the one request */
     bool active;             /* the board holds it; tinc_poll() drives it */
+    bool tls_wait;           /* https, maybe in TLS: longer reply timeout */
     uint8_t state;           /* tinc_state_t */
     tinc_err_t err;
     uint8_t err_detail;      /* TINC_TLSR_* for ERR_TLS / ERR_CERT, else 0 */

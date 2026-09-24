@@ -150,7 +150,8 @@ static tinc_err_t xfer_once(uint8_t type, const tinc_piece_t *pieces, uint8_t n,
         tinc_parser_reset(&tinc_g.parser);
         if (!send_frame(type, pieces, n))
             return TINC_ERR_NO_DEVICE;
-        r = wait_reply(type, (uint16_t)(TINC_REPLY_TIMEOUT_MS + wait_ms));
+        r = wait_reply(type, (uint16_t)((tinc_g.tls_wait ? TINC_REPLY_TIMEOUT_TLS_MS
+                                                         : TINC_REPLY_TIMEOUT_MS) + wait_ms));
         if (r < 0)
             return TINC_ERR_NO_DEVICE;
         if (r > 0) {

@@ -44,7 +44,10 @@ static struct {
     uint16_t last_len;
     bool have_last, eof;
     bool responded;                    /* answered before the upload finished */
+    unsigned long hold_until;          /* fake_now before which nothing arrives */
 } esp;
+
+static uint8_t req_state(void);
 
 static void push(const uint8_t *p, uint16_t len)
 {
@@ -52,6 +55,8 @@ static void push(const uint8_t *p, uint16_t len)
         fake.drop_replies--;
         return;
     }
+    if (fake.tls_stall_ms && req_state() == TINC_RS_TLS)
+        esp.hold_until = fake_now + fake.tls_stall_ms * 1000ul;
     if (esp.rxq_pos == esp.rxq_len)
         esp.rxq_pos = esp.rxq_len = 0;
     memcpy(esp.rxq + esp.rxq_len, p, len);
@@ -451,6 +456,8 @@ int srl_Read(srl_device_t *srl, void *data, size_t length)
     size_t n = (size_t)(esp.rxq_len - esp.rxq_pos);
 
     (void)srl;
+    if (fake_now < esp.hold_until)
+        return 0;
     if (n > length)
         n = length;
     memcpy(data, esp.rxq + esp.rxq_pos, n);
