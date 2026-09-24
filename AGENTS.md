@@ -53,8 +53,8 @@ automatically. That's packaging, not a fork.
   `tinc_init()` now retries HELLO on `NO_REPLY` until `TINC_DEVICE_WAIT_MS`,
   and a repeat `tinc_init()` keeps USB up instead of re-enumerating (which
   made COM9 vanish on every retry). While the calculator is idle nothing
-  answers USB, so the PC's open blocks until the next tinclib call. Whether
-  2 s is enough on a first plug-in is not yet measured.
+  answers USB, so the PC's open blocks until the next tinclib call. The
+  2 s window is enough, first plug-in included (tested on hardware).
 - **v0.5.0 (branch `phase-5`): protocol v0.5, uploads and headers.**
   Methods GET/POST/PUT/DELETE/PATCH/HEAD (`tinc_method_t` values equal the
   wire's `TINC_METHOD_*`). A body goes out by `BODY_WRITE`, streamed from
@@ -77,16 +77,14 @@ automatically. That's packaging, not a fork.
   lowercase `https:` only.
 - **Real firmware, from a PC:** `make pc-link` builds `tools/pc_link.c`
   (the real `src/`, with srldrvce swapped for Win32 serial) and runs it
-  against a board on a COM port. Against the v0.1 firmware on COM5, HELLO,
-  STATUS and a refused REQ_BEGIN (`WIFI_DOWN`) all work. A full GET is
-  untested until the board joins Wi-Fi: it reported `FAILED`. The board
-  needs firmware on the same protocol version as the library (now 0.6), or
-  HELLO fails with `ERR_VERSION`.
-- **Not yet run on a calculator with a board.** The board on COM5 uses a
-  **CP210x** bridge, and srldrvce supports only CDC, FTDI and PL2303 (the
-  CH340 boards aren't supported either), so a calculator won't see it.
-  Needs an FTDI/PL2303 adapter on the ESP's UART, or a native-USB chip:
-  a hardware decision for the user.
+  against a board on a COM port. The board needs firmware on the same
+  protocol version as the library (now 0.6), or HELLO fails with
+  `ERR_VERSION`.
+- **Hardware-tested as of v0.6.0 (2026-09-23):** the calculator straight
+  into a PC (tinclib-firmware's `pc` target, COM9), a calculator with a
+  board, and full requests through real firmware all work. srldrvce only
+  drives CDC, FTDI and PL2303 bridges (not CP210x or CH340), so a board
+  needs one of those, or a native-USB chip, to talk to a calculator.
 - The `INSECURE` request flag, chunked uploads (`TINC_LEN_UNKNOWN`) and the
   BOOT event are waiting on the protocol. When they land there, add them
   here.
