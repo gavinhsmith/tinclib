@@ -219,25 +219,34 @@ tinc_err_t tinc_init(const tinc_config_t *cfg)
     tinc_err_t setup, err;
     clock_t start;
 
-    tinc_shutdown();
+    if (tinc_g.ready)
+        tinc_abort();
     memset(&tinc_g, 0, sizeof tinc_g);
     tinc_g.cfg = cfg ? *cfg : defaults;
     tinc_parser_init(&tinc_g.parser, tinc_g.frame, sizeof tinc_g.frame);
 
     setup = tinc_takeSetupResult();
 
-    if (usb_Init(on_usb, NULL, srl_GetCDCStandardDescriptors(), USB_DEFAULT_INIT_FLAGS)
-        != USB_SUCCESS) {
-        usb_Cleanup();
-        return setup ? setup : TINC_ERR_NO_DEVICE;
+    /* A retry keeps USB up: tearing it down makes a PC host re-enumerate
+     * the calculator, and its COM port goes away with it. */
+    if (!usb_up) {
+        if (usb_Init(on_usb, NULL, srl_GetCDCStandardDescriptors(),
+                     USB_DEFAULT_INIT_FLAGS) != USB_SUCCESS) {
+            usb_Cleanup();
+            return setup ? setup : TINC_ERR_NO_DEVICE;
+        }
+        usb_up = true;
     }
-    usb_up = true;
 
+    /* A PC host is "connected" as soon as it configures us, but its app
+     * can only open the port while we pump USB events, so keep saying
+     * HELLO until the deadline. */
     start = clock();
-    while (!has_srl && !tinc_elapsed(start, TINC_DEVICE_WAIT_MS))
-        usb_HandleEvents();
-
-    err = has_srl ? hello() : TINC_ERR_NO_DEVICE;
+    do {
+        while (!has_srl && !tinc_elapsed(start, TINC_DEVICE_WAIT_MS))
+            usb_HandleEvents();
+        err = has_srl ? hello() : TINC_ERR_NO_DEVICE;
+    } while (err == TINC_ERR_NO_REPLY && !tinc_elapsed(start, TINC_DEVICE_WAIT_MS));
     tinc_g.ready = err == TINC_OK;
     return setup ? setup : err;
 }

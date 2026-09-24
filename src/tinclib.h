@@ -41,7 +41,7 @@ extern "C" {
  * X.Y, and the board's firmware must too. PATCH counts library-only releases
  * on the same protocol; reset it to 0 when the protocol submodule moves.
  */
-#define TINC_VERSION_PATCH 0
+#define TINC_VERSION_PATCH 1
 
 #define TINC_STR_(x) #x
 #define TINC_STR(x) TINC_STR_(x)
@@ -57,7 +57,10 @@ extern "C" {
 #define TINC_RX_BUF_SIZE 256
 #endif
 
-/** How long tinc_init() waits for the ESP board to show up on USB. */
+/**
+ * How long tinc_init() waits for the board (or a PC host) to show up on USB
+ * and answer HELLO.
+ */
 #ifndef TINC_DEVICE_WAIT_MS
 #define TINC_DEVICE_WAIT_MS 2000u
 #endif
