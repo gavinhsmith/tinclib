@@ -105,7 +105,7 @@ typedef enum {
 typedef enum {
     TINC_IDLE = 0,         /**< no request */
     TINC_CONNECTING,
-    TINC_SECURING,         /**< TLS handshake (not before HTTPS support) */
+    TINC_SECURING,         /**< https: board waits for its clock, then the TLS handshake */
     TINC_WAITING,          /**< sent, waiting for the response headers */
     TINC_BODY,             /**< tinc_read() the body; status and type are valid */
     TINC_DONE,             /**< whole body read; the request is released */
@@ -134,7 +134,7 @@ void tinc_shutdown(void);
 
 typedef struct {
     tinc_method_t method;
-    const char   *url;       /**< "http://..." (no https yet) */
+    const char   *url;       /**< "http://..." or "https://..." (certificates always verified) */
     const char   *headers;   /**< raw "Name: value\r\n..." or NULL */
     /**
      * Request body. NOT COPIED: it is streamed out from this pointer during
@@ -169,6 +169,13 @@ const char *tinc_contentType(void);
 
 /** Why the last request ended in TINC_ERROR. */
 tinc_err_t tinc_error(void);
+
+/**
+ * More about a TLS failure: when tinc_error() is TINC_ERR_TLS or
+ * TINC_ERR_CERT, the board's reason, a TINC_TLSR_* code from protocol.h
+ * (TINC_TLSR_EXPIRED, TINC_TLSR_HOSTNAME, ...). 0 (TINC_TLSR_OTHER) otherwise.
+ */
+uint8_t tinc_errDetail(void);
 
 /** Short English description of an error code. */
 const char *tinc_errString(tinc_err_t e);

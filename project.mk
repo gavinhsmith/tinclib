@@ -34,6 +34,10 @@ NAME = TINCFULL
 DESCRIPTION = "tinclib size check"
 MAIN = examples/size_min/main.c
 SIZE_FLAGS = -DTINC_SIZE_FULL
+else ifeq ($(EXAMPLE),size_cpp)
+NAME = TINCCPP
+DESCRIPTION = "tinclib size check"
+MAIN_CPP = examples/size_min/main.cpp
 else ifneq ($(HW_NAME_$(EXAMPLE:hw_%=%)),)
 NAME = $(HW_NAME_$(EXAMPLE:hw_%=%))
 DESCRIPTION = "tinclib hw test"
@@ -42,7 +46,9 @@ else
 $(error unknown EXAMPLE '$(EXAMPLE)': expected a directory under examples/ or tests/hw/ listed here)
 endif
 
+ifndef MAIN_CPP
 MAIN ?= examples/$(EXAMPLE)/main.c
+endif
 
 ICON =
 COMPRESSED = NO
@@ -53,7 +59,8 @@ CXXFLAGS = -Wall -Wextra -Oz -Isrc -I$(PROTO)
 # src/*.c (the library) is picked up automatically as SRCDIR; add the
 # protocol and the program.
 EXTRA_C_SOURCES = $(MAIN) $(PROTO)/crc16.c $(PROTO)/tinc_frame.c
-EXTRA_HEADERS = $(wildcard src/*.h) $(wildcard $(PROTO)/*.h)
+EXTRA_CXX_SOURCES = $(MAIN_CPP)
+EXTRA_HEADERS = $(wildcard src/*.h src/*.hpp) $(wildcard $(PROTO)/*.h)
 
 OBJDIR = obj/$(EXAMPLE)
 BINDIR = bin/$(EXAMPLE)

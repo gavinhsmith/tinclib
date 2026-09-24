@@ -20,7 +20,7 @@ jobs:
         run: make -C tests CC=gcc
 
       - name: Run tests (clang, ASan + UBSan)
-        run: make -C tests clean test CC=clang
+        run: make -C tests clean test CC=clang CXX=clang++
 
   build:
     name: Build (CEdev)

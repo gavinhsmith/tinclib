@@ -5,7 +5,7 @@
 # The hardware tests under tests/hw/ are built the same way (`make hw-build`)
 # and run in CEmu's autotester with `make hw-test`; see tests/hw/run.py.
 
-EXAMPLES := hello size_min size_full
+EXAMPLES := hello size_min size_full size_cpp
 HWTESTS := $(addprefix hw_,$(notdir $(patsubst %/,%,$(dir $(wildcard tests/hw/*/autotest.json))))) hw_stub_tinclibc
 
 PYTHON ?= python

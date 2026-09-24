@@ -33,10 +33,11 @@ tinc_shutdown();
 - `tinc_openConfig()` sends the user to TINCLIBC. **Your program is unloaded
   and starts over from `main()` afterwards, so save your state first.**
   `tinc_init()` then tells you whether setup worked.
-- Protocol 0.3: plain `http://` GET only. HTTPS and POST come with later
-  protocol versions. The board's firmware must speak the same protocol
-  version (0.3): until 1.0, a mismatch fails `tinc_init()` with
-  `TINC_ERR_VERSION`.
+- Protocol 0.4: GET over `http://` or `https://`. HTTPS certificates are
+  always checked against CA roots built into the board's firmware (TLS 1.2
+  at most). POST comes with a later protocol version. The board's firmware
+  must speak the same protocol version (0.4): until 1.0, a mismatch fails
+  `tinc_init()` with `TINC_ERR_VERSION`.
 
 See `examples/hello/` for a complete program.
 
@@ -55,5 +56,28 @@ don't call (`make size-check` verifies it: a program that only checks the
 connection is about half the size of one using everything). The calculator
 needs the [CE C libraries](https://github.com/CE-Programming/libraries/releases)
 usbdrvce, srldrvce and fileioc.
+
+### C++
+
+`tinclib.h` works from C++ as is. `tinclib.hpp` adds thin, header-only
+bindings: the same calls in namespace `tinc`, enum classes for states and
+methods, and a `tinc::Session` that calls `tinc_init()` and, when it goes out
+of scope, `tinc_shutdown()`. No exceptions, no allocation; errors are return
+codes as in C. Add `-Ilib/tinclib/src` to `CXXFLAGS`.
+
+```cpp
+#include "tinclib.hpp"
+
+tinc::Session net({ "MYAPP", 0, TINC_CF_ASCII });
+if (net.err() == tinc::Ok && tinc::isActive() &&
+    tinc::request(tinc::Method::Get, "https://example.com/") == tinc::Ok) {
+    char buf[64];
+    tinc::State st;
+    while ((st = tinc::poll()) != tinc::State::Done && st != tinc::State::Error) {
+        int16_t n = tinc::read(buf);   // size taken from the array
+        // use n bytes of buf
+    }
+}
+```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) to build and test tinclib itself.

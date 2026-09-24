@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "fake_esp.h"
+#include "tinc_frame.h"
 #include "tinclib.h"
 #include "vectors.h"
 
@@ -99,6 +100,83 @@ static void test_golden_locked_status(void)
     CHECK(tinc_isActive(TINC_WIFI));
     CHECK(!fake.script_mismatch);
     CHECK(fake.script_pos == fake.script_len);
+}
+
+/* 0.4: an https request that fails the certificate check. */
+static void test_golden_https_cert(void)
+{
+    static const fake_step_t script[] = {
+        { tv_hello_req, sizeof tv_hello_req, tv_hello_resp, sizeof tv_hello_resp },
+        { tv_status_req, sizeof tv_status_req, tv_status_resp, sizeof tv_status_resp },
+        { tv_req_begin_req_https, sizeof tv_req_begin_req_https, tv_req_begin_resp, sizeof tv_req_begin_resp },
+        { tv_req_status_req, sizeof tv_req_status_req, tv_req_status_resp_cert, sizeof tv_req_status_resp_cert },
+    };
+    tinc_request_t req = get("https://example.com/api?q=1");
+
+    setup();
+    fake.script = script;
+    fake.script_len = sizeof script / sizeof script[0];
+    CHECK(tinc_init(NULL) == TINC_OK);
+    CHECK(tinc_isActive(TINC_WIFI));   /* STATUS with TIME_VALID set */
+    CHECK(tinc_request(&req) == TINC_OK);
+    CHECK(tinc_poll() == TINC_ERROR);
+    CHECK(tinc_error() == TINC_ERR_CERT);
+    CHECK(tinc_errDetail() == TINC_TLSR_HOSTNAME);
+    CHECK(!fake.script_mismatch);
+    CHECK(fake.script_pos == fake.script_len);
+}
+
+/* The TLS reason can also come in a BODY_READ error reply. */
+static void test_err_detail_body_read(void)
+{
+    static const uint8_t err[] = { TINC_ERR_TLS, TINC_TLSR_ALERT };
+    static uint8_t body_err[TINC_OVERHEAD + sizeof err];
+    static fake_step_t script[] = {
+        { tv_hello_req, sizeof tv_hello_req, tv_hello_resp, sizeof tv_hello_resp },
+        { tv_status_req, sizeof tv_status_req, tv_status_resp, sizeof tv_status_resp },
+        { tv_req_begin_req, sizeof tv_req_begin_req, tv_req_begin_resp, sizeof tv_req_begin_resp },
+        { tv_req_status_req, sizeof tv_req_status_req, tv_req_status_resp, sizeof tv_req_status_resp },
+        { NULL, 0, body_err, sizeof body_err },
+    };
+    static const tinc_config_t cfg = { NULL, 0, TINC_CF_ASCII };
+    tinc_request_t req = { TINC_GET, "http://example.com/api?q=1", "Accept: application/json\r\n", NULL, 0 };
+
+    tinc_frame_encode(body_err, TINC_FLAG_RESP | TINC_FLAG_ERR, TINC_T_BODY_READ, 5, err, sizeof err);
+    setup();
+    fake.script = script;
+    fake.script_len = sizeof script / sizeof script[0];
+    CHECK(tinc_init(&cfg) == TINC_OK);
+    CHECK(tinc_isActive(TINC_WIFI));
+    CHECK(tinc_request(&req) == TINC_OK);
+    CHECK(tinc_poll() == TINC_ERROR);
+    CHECK(tinc_error() == TINC_ERR_TLS);
+    CHECK(tinc_errDetail() == TINC_TLSR_ALERT);
+    CHECK(!fake.script_mismatch);
+
+    /* Any other error clears it. */
+    setup();
+    fake.req_err = TINC_ERR_DNS;
+    CHECK(tinc_init(NULL) == TINC_OK);
+    CHECK(tinc_request(&req) == TINC_OK);
+    CHECK(tinc_poll() == TINC_ERROR);
+    CHECK(tinc_errDetail() == 0);
+}
+
+/* https goes through SECURING on its way to the body. */
+static void test_https(void)
+{
+    tinc_request_t req = get("https://example.com/");
+    char body[16];
+
+    setup();
+    fake.req_polls = 1;
+    fake.body = "ok";
+    CHECK(tinc_init(NULL) == TINC_OK);
+    CHECK(tinc_request(&req) == TINC_OK);
+    CHECK(tinc_poll() == TINC_SECURING);
+    CHECK(tinc_poll() == TINC_WAITING);
+    CHECK(run(body, sizeof body, 16) == TINC_DONE);
+    CHECK(strcmp(body, "ok") == 0);
 }
 
 static void test_no_device(void)
@@ -450,6 +528,7 @@ static void test_err_strings(void)
         TINC_ERR_BUSY, TINC_ERR_BAD_STATE, TINC_ERR_BAD_OFFSET, TINC_ERR_BAD_ARG,
         TINC_ERR_UNSUPPORTED_SCHEME, TINC_ERR_LOCKED, TINC_ERR_WIFI_DOWN, TINC_ERR_DNS, TINC_ERR_CONNECT,
         TINC_ERR_TIMEOUT, TINC_ERR_HTTP_PROTO, TINC_ERR_TOO_MANY_REDIRECTS, TINC_ERR_NO_MEM,
+        TINC_ERR_TLS, TINC_ERR_CERT, TINC_ERR_TIME, TINC_ERR_REDIRECT_DOWNGRADE,
         TINC_ERR_NO_DEVICE, TINC_ERR_NO_REPLY, TINC_ERR_ESP_RESET, TINC_ERR_NOT_INIT,
         TINC_ERR_UNSUPPORTED_METHOD, TINC_ERR_SETUP_CANCELLED, TINC_ERR_SETUP_FAILED,
         TINC_ERR_NO_CONFIG_APP,
@@ -472,6 +551,9 @@ int main(void)
 {
     RUN(test_golden_vectors);
     RUN(test_golden_locked_status);
+    RUN(test_golden_https_cert);
+    RUN(test_err_detail_body_read);
+    RUN(test_https);
     RUN(test_no_device);
     RUN(test_version_mismatch);
     RUN(test_is_active);
