@@ -46,6 +46,14 @@ automatically. That's packaging, not a fork.
 - Upstream moved the `v0.2.0` protocol tag (from `9c21d6e` to `1c008bc`)
   after tinclib v0.2.0 shipped. The files are identical; only the history
   was rewritten.
+- **v0.4.1 (branch `win-serial-patch`): PC host fix.** With the calculator
+  plugged straight into a PC, `tinc_init()` gave up after 600 ms, before
+  Windows' usbser was loaded and the PC app had the port open.
+  `tinc_init()` now retries HELLO on `NO_REPLY` until `TINC_DEVICE_WAIT_MS`,
+  and a repeat `tinc_init()` keeps USB up instead of re-enumerating (which
+  made COM9 vanish on every retry). While the calculator is idle nothing
+  answers USB, so the PC's open blocks until the next tinclib call. Whether
+  2 s is enough on a first plug-in is not yet measured.
 - **Real firmware, from a PC:** `make pc-link` builds `tools/pc_link.c`
   (the real `src/`, with srldrvce swapped for Win32 serial) and runs it
   against a board on a COM port. Against the v0.1 firmware on COM5, HELLO,

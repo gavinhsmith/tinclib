@@ -331,6 +331,26 @@ static void test_lost_reply_is_not_rerun(void)
     CHECK(strcmp(body, "0123456789") == 0);
 }
 
+/* A PC host answers only once its app has the port open: HELLO keeps
+ * being retried until TINC_DEVICE_WAIT_MS, then gives up. */
+static void test_hello_late_reply(void)
+{
+    unsigned long start, elapsed_ms;
+
+    setup();
+    fake.drop_replies = TINC_RETRY_MAX * 2;
+    CHECK(tinc_init(NULL) == TINC_OK);
+    CHECK(fake.frames_in == TINC_RETRY_MAX * 2 + 1);
+
+    setup();
+    fake.drop_replies = 255;
+    start = fake_now;
+    CHECK(tinc_init(NULL) == TINC_ERR_NO_REPLY);
+    elapsed_ms = (fake_now - start) / 1000;
+    CHECK(elapsed_ms >= TINC_DEVICE_WAIT_MS);
+    CHECK(elapsed_ms < TINC_DEVICE_WAIT_MS + TINC_RETRY_MAX * TINC_REPLY_TIMEOUT_MS + 100);
+}
+
 static void test_board_gone_quiet(void)
 {
     tinc_request_t req = get("http://x/");
@@ -561,6 +581,7 @@ int main(void)
     RUN(test_last_chunk_held_until_read);
     RUN(test_is_active_mid_chunk);
     RUN(test_lost_reply_is_not_rerun);
+    RUN(test_hello_late_reply);
     RUN(test_board_gone_quiet);
     RUN(test_esp_reset_mid_request);
     RUN(test_request_errors);
