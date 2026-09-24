@@ -51,7 +51,17 @@ static void test_get()
         CHECK(strcmp(body, "hello from c++") == 0);
         CHECK(tinc::httpStatus() == 200);
         CHECK(strcmp(tinc::contentType(), "text/plain") == 0);
-        CHECK(tinc::request(tinc::Method::Post, "http://x/", nullptr, "a", 1) == TINC_ERR_UNSUPPORTED_METHOD);
+        CHECK(tinc::request(tinc::Method::Post, "http://x/", nullptr, "a", 1) == tinc::Ok);
+        while ((st = tinc::poll()) != tinc::State::Done && st != tinc::State::Error) {
+            char chunk[16];
+            char loc[8];
+
+            if (st == tinc::State::Body)
+                CHECK(tinc::header("Location", loc) == -1);
+            tinc::read(chunk);
+        }
+        CHECK(st == tinc::State::Done);
+        CHECK(fake.method == TINC_METHOD_POST && fake.upload_len == 1);
     }
     /* ~Session shut the link down. */
     CHECK(tinc::request(tinc::Method::Get, "http://x/") == TINC_ERR_NOT_INIT);

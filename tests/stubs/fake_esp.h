@@ -32,6 +32,10 @@ typedef struct {
     uint16_t chunk_max;      /* 0 = as much as max_len allows */
     uint8_t empty_reads;     /* BODY_READs answered empty before the data */
     uint8_t drop_replies;    /* the next N replies are "lost" (not sent) */
+    uint16_t write_max;      /* BODY_WRITE takes at most this much, 0 = all offered */
+    bool respond_early;      /* the server answers after the first bytes of upload */
+    const char *hdr_name;    /* the one response header HDR_GET knows (exact case) */
+    const char *hdr_value;
 
     /* scripted mode: replay these steps instead of emulating */
     const fake_step_t *script;
@@ -44,6 +48,10 @@ typedef struct {
     char url[256];
     char headers[256];
     uint8_t req_flags, req_timeout;
+    uint8_t method;
+    uint32_t content_len;
+    uint8_t upload[1024];    /* the request body as the board took it */
+    uint16_t upload_len;
 } fake_esp_t;
 
 extern fake_esp_t fake;

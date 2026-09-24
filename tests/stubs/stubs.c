@@ -36,12 +36,14 @@ static struct {
     uint16_t cache_len;
     uint8_t cache_seq;
     bool cache_valid, hello_done;
+    uint16_t ce_max;                   /* the CE's receive limit, from HELLO */
     /* the request */
     bool active;
     uint8_t polls;
     uint32_t last_off;
     uint16_t last_len;
     bool have_last, eof;
+    bool responded;                    /* answered before the upload finished */
 } esp;
 
 static void push(const uint8_t *p, uint16_t len)
@@ -78,6 +80,8 @@ static uint8_t req_state(void)
         return strncmp(fake.url, "https:", 6) == 0 ? TINC_RS_TLS : TINC_RS_CONNECTING;
     if (fake.req_err)
         return TINC_RS_ERROR;
+    if (fake.upload_len < fake.content_len && !esp.responded)
+        return TINC_RS_SENDING;
     if (esp.polls < 2 * fake.req_polls)
         return TINC_RS_WAIT_HEADERS;
     return esp.eof ? TINC_RS_DONE : TINC_RS_BODY;
@@ -127,6 +131,75 @@ static void body_read(uint8_t seq, const uint8_t *q, uint16_t qlen)
     reply(0, TINC_T_BODY_READ, seq, out, (uint16_t)(TINC_READ_DATA + len));
 }
 
+static void body_write(uint8_t seq, const uint8_t *q, uint16_t qlen)
+{
+    uint8_t out[TINC_WRITE_RESP_LEN];
+    uint8_t st = req_state();
+    uint32_t off;
+    uint16_t n;
+
+    if (qlen < TINC_WRITE_DATA)
+        return reply_err(TINC_T_BODY_WRITE, seq, TINC_ERR_BAD_LEN);
+    if (st == TINC_RS_ERROR)
+        return reply_err(TINC_T_BODY_WRITE, seq, fake.req_err);
+    off = tinc_get_u32(q + TINC_WRITE_OFFSET);
+    n = (uint16_t)(qlen - TINC_WRITE_DATA);
+    if (st == TINC_RS_SENDING) {
+        if (off != fake.upload_len) {
+            out[0] = TINC_ERR_BAD_OFFSET;
+            tinc_put_u32(out + 1, fake.upload_len);
+            return reply(TINC_FLAG_ERR, TINC_T_BODY_WRITE, seq, out, 5);
+        }
+        if (off + n > fake.content_len || off + n > sizeof fake.upload)
+            return reply_err(TINC_T_BODY_WRITE, seq, TINC_ERR_BAD_ARG);
+        if (fake.write_max && n > fake.write_max)
+            n = fake.write_max;
+        memcpy(fake.upload + off, q + TINC_WRITE_DATA, n);
+        fake.upload_len = (uint16_t)(fake.upload_len + n);
+        if (fake.respond_early && n)
+            esp.responded = true;
+    } else if (st != TINC_RS_CONNECTING && st != TINC_RS_TLS && !esp.responded) {
+        return reply_err(TINC_T_BODY_WRITE, seq, TINC_ERR_BAD_STATE);
+    }
+    esp.polls++;
+    tinc_put_u32(out + TINC_WRITE_NEXT_OFFSET, fake.upload_len);
+    out[TINC_WRITE_FLAGS] = esp.responded ? TINC_WRITEF_RESPONDED : 0;
+    reply(0, TINC_T_BODY_WRITE, seq, out, TINC_WRITE_RESP_LEN);
+}
+
+static void hdr_get(uint8_t seq, const uint8_t *q, uint16_t qlen)
+{
+    uint8_t out[TINC_PAYLOAD_LIMIT];
+    uint8_t st = req_state();
+    uint16_t off, total = 0, n;
+    bool found;
+
+    if (qlen < TINC_HGET_NAME || qlen != TINC_HGET_NAME + q[TINC_HGET_NAME_LEN])
+        return reply_err(TINC_T_HDR_GET, seq, TINC_ERR_BAD_LEN);
+    if (st == TINC_RS_ERROR)
+        return reply_err(TINC_T_HDR_GET, seq, fake.req_err);
+    if (st != TINC_RS_BODY && st != TINC_RS_DONE)
+        return reply_err(TINC_T_HDR_GET, seq, TINC_ERR_BAD_STATE);
+    if (!q[TINC_HGET_NAME_LEN])
+        return reply_err(TINC_T_HDR_GET, seq, TINC_ERR_BAD_ARG);
+
+    found = fake.hdr_name && strlen(fake.hdr_name) == q[TINC_HGET_NAME_LEN] &&
+            memcmp(fake.hdr_name, q + TINC_HGET_NAME, q[TINC_HGET_NAME_LEN]) == 0;
+    if (found)
+        total = (uint16_t)strlen(fake.hdr_value);
+    off = tinc_get_u16(q + TINC_HGET_OFFSET);
+    if (off > total)
+        return reply_err(TINC_T_HDR_GET, seq, TINC_ERR_BAD_OFFSET);
+    n = (uint16_t)(total - off);
+    if (n > esp.ce_max - TINC_HGET_DATA)
+        n = (uint16_t)(esp.ce_max - TINC_HGET_DATA);
+    out[TINC_HGET_FLAGS] = found ? TINC_HGETF_FOUND : 0;
+    tinc_put_u16(out + TINC_HGET_TOTAL_LEN, total);
+    if (n)
+        memcpy(out + TINC_HGET_DATA, fake.hdr_value + off, n);
+    reply(0, TINC_T_HDR_GET, seq, out, (uint16_t)(TINC_HGET_DATA + n));
+}
+
 static void copy_str(char *dst, const uint8_t *src, uint16_t n)
 {
     if (n > 255)
@@ -173,6 +246,9 @@ static void handle(const tinc_parser *p)
             reply(TINC_FLAG_ERR, p->type, p->seq, out, 3);
             return;
         }
+        esp.ce_max = tinc_get_u16(q + TINC_HELLO_MAX_PAYLOAD);
+        if (esp.ce_max > TINC_PAYLOAD_LIMIT)
+            esp.ce_max = TINC_PAYLOAD_LIMIT;
         out[TINC_HELLO_MAJOR] = fake.major;
         out[TINC_HELLO_MINOR] = fake.minor;
         tinc_put_u16(out + TINC_HELLO_CAPS, 0);
@@ -212,7 +288,10 @@ static void handle(const tinc_parser *p)
         hl = tinc_get_u16(q + TINC_BEGIN_HDR_LEN);
         if (TINC_BEGIN_URL + ul + hl != p->len)
             return reply_err(p->type, p->seq, TINC_ERR_BAD_LEN);
-        if (q[TINC_BEGIN_METHOD] != TINC_METHOD_GET)
+        if (q[TINC_BEGIN_METHOD] < TINC_METHOD_GET || q[TINC_BEGIN_METHOD] > TINC_METHOD_HEAD)
+            return reply_err(p->type, p->seq, TINC_ERR_BAD_ARG);
+        if ((q[TINC_BEGIN_METHOD] == TINC_METHOD_GET || q[TINC_BEGIN_METHOD] == TINC_METHOD_HEAD) &&
+            tinc_get_u32(q + TINC_BEGIN_CONTENT_LEN))
             return reply_err(p->type, p->seq, TINC_ERR_BAD_ARG);
         if (fake.wifi_state != TINC_WIFI_CONNECTED)
             return reply_err(p->type, p->seq, TINC_ERR_WIFI_DOWN);
@@ -220,6 +299,10 @@ static void handle(const tinc_parser *p)
         copy_str(fake.headers, q + TINC_BEGIN_URL + ul, hl);
         fake.req_flags = q[TINC_BEGIN_FLAGS];
         fake.req_timeout = q[TINC_BEGIN_TIMEOUT_S];
+        fake.method = q[TINC_BEGIN_METHOD];
+        fake.content_len = tinc_get_u32(q + TINC_BEGIN_CONTENT_LEN);
+        fake.upload_len = 0;
+        esp.responded = false;
         esp.active = true;
         esp.polls = 0;
         esp.have_last = esp.eof = false;
@@ -249,6 +332,14 @@ static void handle(const tinc_parser *p)
 
     case TINC_T_BODY_READ:
         body_read(p->seq, q, p->len);
+        break;
+
+    case TINC_T_BODY_WRITE:
+        body_write(p->seq, q, p->len);
+        break;
+
+    case TINC_T_HDR_GET:
+        hdr_get(p->seq, q, p->len);
         break;
 
     case TINC_T_REQ_ABORT:

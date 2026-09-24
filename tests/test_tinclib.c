@@ -6,6 +6,7 @@
 
 #include "fake_esp.h"
 #include "tinc_frame.h"
+#include "tinc_internal.h"   /* tinc_g.seq, to line up with golden frames */
 #include "tinclib.h"
 #include "vectors.h"
 
@@ -124,6 +125,143 @@ static void test_golden_https_cert(void)
     CHECK(tinc_errDetail() == TINC_TLSR_HOSTNAME);
     CHECK(!fake.script_mismatch);
     CHECK(fake.script_pos == fake.script_len);
+}
+
+/* 0.5: a POST whose body the board takes in two writes. */
+static void test_golden_post(void)
+{
+    static const fake_step_t script[] = {
+        { tv_hello_req, sizeof tv_hello_req, tv_hello_resp, sizeof tv_hello_resp },
+        { tv_status_req, sizeof tv_status_req, tv_status_resp, sizeof tv_status_resp },
+        { tv_req_begin_req_post, sizeof tv_req_begin_req_post, tv_req_begin_resp, sizeof tv_req_begin_resp },
+        { tv_body_write_req, sizeof tv_body_write_req, tv_body_write_resp_partial, sizeof tv_body_write_resp_partial },
+        { tv_body_write_req_rest, sizeof tv_body_write_req_rest, tv_body_write_resp_done, sizeof tv_body_write_resp_done },
+    };
+    static const char body[] = "{\"name\":\"calc\",\"n\":84}";
+    tinc_request_t req = { TINC_POST, "https://example.com/api?q=1",
+                           "Content-Type: application/json\r\n", body, sizeof body - 1 };
+
+    setup();
+    fake.script = script;
+    fake.script_len = sizeof script / sizeof script[0];
+    CHECK(tinc_init(NULL) == TINC_OK);
+    CHECK(tinc_isActive(TINC_WIFI));
+    CHECK(tinc_request(&req) == TINC_OK);
+    tinc_g.seq = 0x14;                 /* the golden writes are SEQ 0x15, 0x16 */
+    CHECK(tinc_poll() == TINC_SENDING);
+    CHECK(tinc_poll() == TINC_WAITING);
+    CHECK(!fake.script_mismatch);
+    CHECK(fake.script_pos == fake.script_len);
+}
+
+/* An upload the board takes a bit at a time, nothing while connecting. */
+static void test_post_upload(void)
+{
+    static char up[600];
+    char body[32];
+    tinc_request_t req = { TINC_POST, "http://x/", NULL, up, sizeof up };
+    uint16_t i;
+
+    for (i = 0; i < sizeof up; i++)
+        up[i] = (char)('a' + i % 26);
+    setup();
+    fake.req_polls = 2;
+    fake.write_max = 100;
+    fake.http_status = 201;
+    fake.body = "created";
+    CHECK(tinc_init(NULL) == TINC_OK);
+    CHECK(tinc_request(&req) == TINC_OK);
+    CHECK(fake.method == TINC_METHOD_POST && fake.content_len == sizeof up);
+    CHECK(tinc_poll() == TINC_CONNECTING);
+    CHECK(tinc_poll() == TINC_CONNECTING);
+    CHECK(tinc_poll() == TINC_SENDING);
+    CHECK(run(body, sizeof body, 32) == TINC_DONE);
+    CHECK(strcmp(body, "created") == 0);
+    CHECK(tinc_httpStatus() == 201);
+    CHECK(fake.upload_len == sizeof up && memcmp(fake.upload, up, sizeof up) == 0);
+    CHECK(fake.executed[TINC_T_BODY_WRITE] == 2 + 6);
+}
+
+/* The server answers mid-upload (413): stop sending, read the answer. */
+static void test_post_responded(void)
+{
+    static char up[100];
+    char body[32];
+    tinc_request_t req = { TINC_PUT, "http://x/", NULL, up, sizeof up };
+
+    setup();
+    fake.write_max = 10;
+    fake.respond_early = true;
+    fake.http_status = 413;
+    fake.body = "too big";
+    CHECK(tinc_init(NULL) == TINC_OK);
+    CHECK(tinc_request(&req) == TINC_OK);
+    CHECK(tinc_poll() == TINC_WAITING);
+    CHECK(run(body, sizeof body, 32) == TINC_DONE);
+    CHECK(tinc_httpStatus() == 413);
+    CHECK(strcmp(body, "too big") == 0);
+    CHECK(fake.upload_len == 10);
+    CHECK(fake.executed[TINC_T_BODY_WRITE] == 1);
+}
+
+static void test_methods(void)
+{
+    static const tinc_method_t methods[] = { TINC_PUT, TINC_PATCH, TINC_DELETE, TINC_HEAD };
+    char body[8];
+    uint8_t i;
+
+    setup();
+    CHECK(tinc_init(NULL) == TINC_OK);
+    for (i = 0; i < 4; i++) {
+        tinc_request_t req = { methods[i], "http://x/", NULL, NULL, 0 };
+
+        fake.executed[TINC_T_BODY_WRITE] = 0;
+        CHECK(tinc_request(&req) == TINC_OK);
+        CHECK(fake.method == (uint8_t)methods[i] && fake.content_len == 0);
+        CHECK(run(body, sizeof body, 8) == TINC_DONE);   /* no body at all */
+        CHECK(body[0] == '\0');
+        CHECK(tinc_httpStatus() == 200);
+        CHECK(fake.executed[TINC_T_BODY_WRITE] == 0);
+    }
+}
+
+/* HDR_GET pages through a long value, and a body chunk that was already
+ * fetched survives it. */
+static void test_header(void)
+{
+    static char loc[301], big[500];
+    char out[400], small[8], body[600];
+    uint16_t len;
+    tinc_request_t req = get("http://x/");
+
+    memset(loc, 'L', sizeof loc - 1);
+    memset(big, 'b', sizeof big - 1);
+    big[0] = 'B';
+    setup();
+    fake.hdr_name = "Location";
+    fake.hdr_value = loc;
+    fake.body = big;
+    fake.chunk_max = 100;
+    fake.req_polls = 1;
+    CHECK(tinc_init(NULL) == TINC_OK);
+    CHECK(tinc_request(&req) == TINC_OK);
+    CHECK(tinc_header("Location", out, sizeof out) == -1);   /* not yet */
+    while (tinc_poll() != TINC_BODY)
+        ;
+    len = (uint16_t)tinc_read(body, 10);                    /* 90 left pending */
+
+    CHECK(tinc_header("Location", out, sizeof out) == 300);
+    CHECK(strcmp(out, loc) == 0);
+    CHECK(fake.executed[TINC_T_HDR_GET] == 2);               /* two pages */
+    CHECK(tinc_header("Location", small, sizeof small) == 300);
+    CHECK(strcmp(small, "LLLLLLL") == 0);
+    CHECK(tinc_header("X-Missing", out, sizeof out) == -1);
+    CHECK(out[0] == '\0');
+    CHECK(tinc_header("Location", NULL, 0) == 300);
+
+    CHECK(run(body + len, (uint16_t)(sizeof body - len), 64) == TINC_DONE);
+    CHECK(strcmp(body, big) == 0);
+    CHECK(tinc_header("Location", out, sizeof out) == 300);  /* DONE still has it */
 }
 
 /* The TLS reason can also come in a BODY_READ error reply. */
@@ -392,7 +530,9 @@ static void test_request_errors(void)
 {
     static char long_url[1100];
     tinc_request_t req = get("http://nowhere/");
-    tinc_request_t post = { TINC_POST, "http://x/", NULL, "a=1", 3 };
+    tinc_request_t bad = { (tinc_method_t)7, "http://x/", NULL, NULL, 0 };
+    tinc_request_t no_body = { TINC_POST, "http://x/", NULL, NULL, 3 };
+    tinc_request_t get_body = { TINC_GET, "http://x/", NULL, "a=1", 3 };
 
     setup();
     fake.req_err = TINC_ERR_DNS;
@@ -403,7 +543,9 @@ static void test_request_errors(void)
     CHECK(tinc_poll() == TINC_ERROR);
     CHECK(tinc_error() == TINC_ERR_DNS);
 
-    CHECK(tinc_request(&post) == TINC_ERR_UNSUPPORTED_METHOD);
+    CHECK(tinc_request(&bad) == TINC_ERR_UNSUPPORTED_METHOD);
+    CHECK(tinc_request(&no_body) == TINC_ERR_BAD_ARG);
+    CHECK(tinc_request(&get_body) == TINC_ERR_BAD_ARG);   /* the board refuses it */
     CHECK(tinc_request(NULL) == TINC_ERR_BAD_ARG);
     memset(long_url, 'a', sizeof long_url - 1);
     req.url = long_url;
@@ -581,6 +723,11 @@ int main(void)
     RUN(test_last_chunk_held_until_read);
     RUN(test_is_active_mid_chunk);
     RUN(test_lost_reply_is_not_rerun);
+    RUN(test_golden_post);
+    RUN(test_post_upload);
+    RUN(test_post_responded);
+    RUN(test_methods);
+    RUN(test_header);
     RUN(test_hello_late_reply);
     RUN(test_board_gone_quiet);
     RUN(test_esp_reset_mid_request);

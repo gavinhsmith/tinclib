@@ -9,7 +9,8 @@ This is the library apps `#include`; it is **not** the config app
 those concerns out of this repo.
 
 Consumes `tinclib-protocol` as a pinned dependency: a git submodule at
-`external/tinclib-protocol`, currently on tag **`v0.4.0`**. It lives inside
+`external/tinclib-protocol`, currently on tag **`v0.5`** (`8e25875`; upstream has no
+`v0.5.0` tag yet, despite its CHANGELOG saying `vMAJOR.MINOR.0`). It lives inside
 the repo root because CEdev on Windows can't build sources reached through
 `..`. **Never fork or hand-copy `protocol.h`/`crc16.c`.** If something needs
 a protocol change, that goes in `tinclib-protocol` first; then bump the
@@ -54,21 +55,34 @@ automatically. That's packaging, not a fork.
   made COM9 vanish on every retry). While the calculator is idle nothing
   answers USB, so the PC's open blocks until the next tinclib call. Whether
   2 s is enough on a first plug-in is not yet measured.
+- **v0.5.0 (branch `phase-5`): protocol v0.5, uploads and headers.**
+  Methods GET/POST/PUT/DELETE/PATCH/HEAD (`tinc_method_t` values equal the
+  wire's `TINC_METHOD_*`). A body goes out by `BODY_WRITE`, streamed from
+  the app's pointer by `tinc_poll()`, as much as the ESP takes per write.
+  As the protocol intends, the write loop is also the connect poll (no
+  REQ_STATUS until the upload is done), so an upload reports
+  `TINC_CONNECTING`, then the new `TINC_SENDING` once bytes are taken, and
+  never `TINC_SECURING`. `RESPONDED` ends the upload early and the response
+  is read as usual. New `tinc_header(name, out, cap)` over `HDR_GET`: pages
+  through long values, returns the full length or -1. Its reply lands in
+  the shared frame buffer, so a pending body chunk is fetched again (same
+  offset re-delivers it). Not used: `INFO` (display only, TINCLIBC's job),
+  `HDR_GET`'s `index` (always 0) and `TRUNC` flag.
 - **Real firmware, from a PC:** `make pc-link` builds `tools/pc_link.c`
   (the real `src/`, with srldrvce swapped for Win32 serial) and runs it
   against a board on a COM port. Against the v0.1 firmware on COM5, HELLO,
   STATUS and a refused REQ_BEGIN (`WIFI_DOWN`) all work. A full GET is
   untested until the board joins Wi-Fi: it reported `FAILED`. The board
-  needs firmware on the same protocol version as the library (now 0.4), or
+  needs firmware on the same protocol version as the library (now 0.5), or
   HELLO fails with `ERR_VERSION`.
 - **Not yet run on a calculator with a board.** The board on COM5 uses a
   **CP210x** bridge, and srldrvce supports only CDC, FTDI and PL2303 (the
   CH340 boards aren't supported either), so a calculator won't see it.
   Needs an FTDI/PL2303 adapter on the ESP's UART, or a native-USB chip:
   a hardware decision for the user.
-- POST (`BODY_WRITE`), the `INSECURE` request flag, `HDR_GET` and the BOOT
-  event are all waiting on the protocol. When they land there, add them
-  here. POST currently returns `TINC_ERR_UNSUPPORTED_METHOD`.
+- The `INSECURE` request flag, chunked uploads (`TINC_LEN_UNKNOWN`) and the
+  BOOT event are waiting on the protocol. When they land there, add them
+  here.
 - Cross-repo follow-up: tinclib-config must **exit** when done instead of
   relaunching `return_to` (see Handoff below), and must match the TINCHND
   layout in `src/tinc_config.c`.
@@ -119,8 +133,8 @@ model is:
 - Rely on the linker discarding unused functions/data so a program that
   only uses a few features doesn't pay for the whole library. **Verified**
   with CEdev v15 (LTO, `-Oz`): `examples/size_min` built with only
-  `tinc_init`/`tinc_isActive` is 4,033 bytes, and the same program using
-  the whole API is 8,367 bytes. `make size-check` (in CI) fails if the gap
+  `tinc_init`/`tinc_isActive` is 4,047 bytes, and the same program using
+  the whole API (POST and `tinc_header` included) is 9,791 bytes. `make size-check` (in CI) fails if the gap
   drops below 2,000 bytes.
 - Split source by feature (core/framing, Wi-Fi status, HTTP request
   handling) so optional pieces stay separable even without perfect dead-code
@@ -131,8 +145,9 @@ model is:
   allocation was never on the table. Currently there is one frame buffer
   (`TINC_FRAME_BUF(TINC_RX_BUF_SIZE)`, default 264 bytes), which also holds
   the pre-fetched body chunk, plus srldrvce's 256-byte ring buffer. The
-  shared buffer is marked `ponytail:` in `tinc_internal.h`: split it if POST
-  streaming needs traffic while a chunk is pending.
+  shared buffer is marked `ponytail:` in `tinc_internal.h`. Uploads finish
+  before the body starts, and `tinc_header()` re-fetches a pending chunk,
+  so it hasn't needed splitting.
 
 ## API shape — read this before changing any function signature
 
@@ -151,7 +166,7 @@ camelCase after the `tinc_` prefix — e.g. `tinc_isActive`, `tinc_httpStatus`,
 not `tinc_IsActive` or `tinc_is_active`). Types: `tinc_snake_case_t`.
 Constants: `TINC_SCREAMING_CASE`.
 
-### Current shape (as implemented in v0.4.0; `src/tinclib.h` is authoritative)
+### Current shape (as implemented in v0.5.0; `src/tinclib.h` is authoritative)
 
 ```c
 typedef struct {
@@ -173,10 +188,11 @@ typedef struct {
 } tinc_request_t;
 
 tinc_err_t   tinc_request(const tinc_request_t *req);  /* starts, returns immediately */
-tinc_state_t tinc_poll(void);   /* TINC_CONNECTING, TINC_SECURING, TINC_WAITING, TINC_BODY, TINC_DONE, TINC_ERROR */
+tinc_state_t tinc_poll(void);   /* TINC_CONNECTING, TINC_SECURING, TINC_SENDING, TINC_WAITING, TINC_BODY, TINC_DONE, TINC_ERROR */
 int16_t      tinc_read(void *buf, uint16_t cap);        /* bytes read, 0 = nothing yet */
 uint16_t     tinc_httpStatus(void);
 const char  *tinc_contentType(void);
+int16_t      tinc_header(const char *name, char *out, uint16_t cap);  /* full length, -1 = none */
 tinc_err_t   tinc_error(void);
 uint8_t      tinc_errDetail(void);                  /* TINC_TLSR_* for ERR_TLS/ERR_CERT, else 0 */
 const char  *tinc_errString(tinc_err_t e);
@@ -225,10 +241,10 @@ Key properties to preserve:
   otherwise send every app straight into a needless config handoff.
 
 ### Not yet in the API (known gap, don't silently add without flagging)
-- No way to read a response header (e.g. `Location` after a redirect) —
-  blocked on `HDR_GET` (`0x13`) being implemented in `tinclib-protocol`
-  and `tinclib-firmware` first. If asked to add `tinc_header(name, out,
-  cap)`, check that the wire message actually exists yet.
+- No way to read the nth copy of a repeated header (`HDR_GET`'s `index`),
+  to tell a real miss from a `TRUNC` false negative, or to get the board's
+  firmware version (`INFO`). Add them when an app needs them.
+- No upload progress (bytes taken so far) beyond `TINC_SENDING`.
 
 ## Handoff to TINCLIBC (config app)
 
@@ -301,7 +317,8 @@ Key properties to preserve:
 - **C++ bindings:** `tests/test_cpp.cpp` (built with `-fno-exceptions
   -fno-rtti`, like CEdev) runs the wrappers against the fake board, and
   `make size_cpp` builds `examples/size_min/main.cpp` with CEdev. The
-  bindings cost 16 bytes over calling the C API from C++ (8,401 vs 8,385).
+  bindings cost 16 bytes over calling the C API from C++ (8,401 vs 8,385,
+  measured at v0.4.0; `size_cpp` is 9,844 bytes at v0.5.0).
 
 ## C++ bindings
 

@@ -18,7 +18,7 @@ int main(void) {
     os_PutStrFull(online ? "Online" : "Offline");
 #ifdef TINC_SIZE_FULL
     {
-        static const tinc_request_t req = { TINC_GET, "http://example.com/", NULL, NULL, 0 };
+        static const tinc_request_t req = { TINC_POST, "http://example.com/", NULL, "a", 1 };
         char buf[16];
 
         if (!online)
@@ -28,7 +28,7 @@ int main(void) {
                 tinc_read(buf, sizeof buf);
         os_PutStrFull(tinc_errString(tinc_error()));
         os_PutStrFull(tinc_contentType());
-        if (tinc_httpStatus() || tinc_errDetail())
+        if (tinc_httpStatus() || tinc_errDetail() || tinc_header("Location", buf, sizeof buf) > 0)
             tinc_abort();
     }
 #endif

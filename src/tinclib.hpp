@@ -41,6 +41,7 @@ enum class State : uint8_t {
     Idle = TINC_IDLE,
     Connecting = TINC_CONNECTING,
     Securing = TINC_SECURING,
+    Sending = TINC_SENDING,
     Waiting = TINC_WAITING,
     Body = TINC_BODY,
     Done = TINC_DONE,
@@ -49,7 +50,11 @@ enum class State : uint8_t {
 
 enum class Method : uint8_t {
     Get = TINC_GET,
-    Post = TINC_POST
+    Post = TINC_POST,
+    Put = TINC_PUT,
+    Delete = TINC_DELETE,
+    Patch = TINC_PATCH,
+    Head = TINC_HEAD
 };
 
 enum class Mode : uint8_t {
@@ -87,6 +92,16 @@ inline int16_t read(T (&buf)[N])
 
 inline uint16_t httpStatus() { return tinc_httpStatus(); }
 inline const char *contentType() { return tinc_contentType(); }
+inline int16_t header(const char *name, char *out, uint16_t cap) { return tinc_header(name, out, cap); }
+
+/** header() into an array, sized for you. */
+template <size_t N>
+inline int16_t header(const char *name, char (&out)[N])
+{
+    static_assert(N <= 0xFFFF, "tinc::header: buffer over 65535 bytes");
+    return tinc_header(name, out, static_cast<uint16_t>(N));
+}
+
 inline Err error() { return tinc_error(); }
 inline uint8_t errDetail() { return tinc_errDetail(); }
 inline const char *errString(Err e) { return tinc_errString(e); }
