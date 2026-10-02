@@ -1,12 +1,43 @@
 # tinclib
 
-Wi-Fi and HTTP for TI-84 Plus CE programs. An ESP8266 board on the
-calculator's USB port does the networking, running
-[tinclib-firmware](https://github.com/gavinhsmith/tinclib-firmware-esp8266).
-tinclib is the C library your program links against to talk to it, over the
-[tinclib-protocol](https://github.com/gavinhsmith/tinclib-protocol) wire
-protocol. Wi-Fi setup is left to the TINCLIBC config app
-([tinclib-config](https://github.com/gavinhsmith/tinclib-config)).
+[![CI](https://github.com/gavinhsmith/tinclib/actions/workflows/ci.yml/badge.svg)](https://github.com/gavinhsmith/tinclib/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/gavinhsmith/tinclib)](https://github.com/gavinhsmith/tinclib/releases)
+[![License: Apache 2.0](https://img.shields.io/github/license/gavinhsmith/tinclib)](LICENSE)
+
+**Wi-Fi, HTTP and HTTPS for TI-84 Plus CE programs.** Plug an ESP8266 board
+into the calculator's USB port and your C or C++ program can fetch web pages,
+call REST APIs and upload data.
+
+- **HTTP and HTTPS**: GET, POST, PUT, PATCH, DELETE and HEAD, with
+  certificate checking, request headers and response headers.
+- **Small**: no `malloc`, static buffers sized at compile time, and the
+  linker drops what you don't call (about 4 KB for a connection check, 10 KB
+  for the whole API).
+- **Simple**: one request at a time, driven by `tinc_poll()` from your main
+  loop. No handles to free.
+- **Wi-Fi setup handled for you**: `tinc_openConfig()` hands off to the
+  TINCLIBC config app.
+- **C and C++**: `tinclib.hpp` adds header-only bindings with no exceptions
+  and no allocation.
+- **Tested**: host unit tests (ASan/UBSan, gcc and clang) against a fake
+  board, CEmu tests, and real hardware.
+
+## How it fits together
+
+tinclib is one part of four:
+
+| Repo | What |
+|---|---|
+| **tinclib** (this one) | The C library your calculator program links against |
+| [tinclib-firmware](https://github.com/gavinhsmith/tinclib-firmware) | Firmware for the ESP8266 board, which does the networking |
+| [tinclib-config](https://github.com/gavinhsmith/tinclib-config) | TINCLIBC, the calculator app for Wi-Fi setup |
+| [tinclib-protocol](https://github.com/gavinhsmith/tinclib-protocol) | The wire protocol between calculator and board |
+
+You need a TI-84 Plus CE, an ESP8266 board whose USB bridge is CDC, FTDI or
+PL2303 (the calculator's USB driver doesn't support CP210x or CH340), and the
+[CE C/C++ Toolchain](https://github.com/CE-Programming/toolchain) to build.
+
+## Example
 
 ```c
 #include "tinclib.h"
@@ -83,4 +114,10 @@ if (net.err() == tinc::Ok && tinc::isActive() &&
 }
 ```
 
+## Contributing
+
 See [CONTRIBUTING.md](CONTRIBUTING.md) to build and test tinclib itself.
+
+## License
+
+[Apache 2.0](LICENSE)

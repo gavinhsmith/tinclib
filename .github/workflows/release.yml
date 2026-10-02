@@ -1,18 +1,19 @@
 name: Release
 
-# Pushing a version tag (e.g. v0.1.0) runs CI, then drafts a GitHub release
-# with the files needed to build tinclib into a CEdev project. Review the
-# draft, add the changes, and publish it by hand.
+# A push to main (a merged PR) runs CI, then publishes a GitHub release for
+# TINC_VERSION with the files needed to build tinclib into a CEdev project,
+# tagging that commit vX.Y.Z. A version that's already released is skipped
+# (a leftover draft is published), so bump the version in the PR that ships.
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
 
 jobs:
   ci:
     uses: ./.github/workflows/ci.yml
 
   release:
-    name: Draft release
+    name: Publish release
     needs: ci
     runs-on: ubuntu-latest
     permissions:
@@ -24,19 +25,37 @@ jobs:
           submodules: true
 
       # TINC_VERSION is the protocol's MAJOR.MINOR plus TINC_VERSION_PATCH.
-      - name: Check TINC_VERSION matches the tag
+      # skip: no = new release, draft = exists unpublished, yes = already out.
+      - name: Read TINC_VERSION
+        id: ver
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           proto=external/tinclib-protocol/protocol.h
           major=$(sed -n 's/^#define TINC_PROTO_MAJOR \([0-9]*\).*/\1/p' $proto)
           minor=$(sed -n 's/^#define TINC_PROTO_MINOR \([0-9]*\).*/\1/p' $proto)
           patch=$(sed -n 's/^#define TINC_VERSION_PATCH \([0-9]*\).*/\1/p' src/tinclib.h)
-          if [ "v$major.$minor.$patch" != "$GITHUB_REF_NAME" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME doesn't match TINC_VERSION v$major.$minor.$patch (protocol $major.$minor, TINC_VERSION_PATCH $patch)."
-            exit 1
+          tag="v$major.$minor.$patch"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if draft=$(gh release view "$tag" --json isDraft -q .isDraft 2>/dev/null); then
+            echo "Release $tag already exists (draft: $draft)."
+            if [ "$draft" = true ]; then skip=draft; else skip=yes; fi
+          else
+            skip=no
           fi
+          echo "skip=$skip" >> "$GITHUB_OUTPUT"
+
+      - name: Publish leftover draft
+        if: steps.ver.outputs.skip == 'draft'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "${{ steps.ver.outputs.tag }}" --draft=false --latest
 
       # The protocol files come from the pinned submodule, unchanged.
       - name: Package
+        if: steps.ver.outputs.skip == 'no'
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
         run: |
           proto=external/tinclib-protocol
           mkdir -p tinclib/src
@@ -48,16 +67,18 @@ jobs:
           major=$(sed -n 's/^#define TINC_PROTO_MAJOR \([0-9]*\).*/\1/p' $proto/protocol.h)
           minor=$(sed -n 's/^#define TINC_PROTO_MINOR \([0-9]*\).*/\1/p' $proto/protocol.h)
           echo "tinclib-protocol v$major.$minor.0 ($(git -C $proto rev-parse --short HEAD))" > tinclib/PROTOCOL_VERSION
-          zip -r "tinclib-$GITHUB_REF_NAME.zip" tinclib
+          zip -r "tinclib-$TAG.zip" tinclib
 
-      - name: Draft release
+      - name: Publish release
+        if: steps.ver.outputs.skip == 'no'
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.ver.outputs.tag }}
         run: |
           cat > notes.md <<NOTES
           ## Using tinclib
 
-          1. Unzip \`tinclib-$GITHUB_REF_NAME.zip\` into your CEdev project's \`lib/\` folder, giving \`lib/tinclib/\`.
+          1. Unzip \`tinclib-$TAG.zip\` into your CEdev project's \`lib/\` folder, giving \`lib/tinclib/\`.
           2. Add its sources to your project's makefile:
 
              \`\`\`make
@@ -69,5 +90,5 @@ jobs:
 
           Keep the library inside your project directory: on Windows, CEdev can't build sources reached through \`..\`. The calculator needs the [CE C libraries](https://github.com/CE-Programming/libraries/releases) (usbdrvce, srldrvce, fileioc), an ESP8266 board running tinclib-firmware, and TINCLIBC for Wi-Fi setup.
           NOTES
-          gh release create "$GITHUB_REF_NAME" "tinclib-$GITHUB_REF_NAME.zip" \
-            --draft --title "$GITHUB_REF_NAME" --notes-file notes.md
+          gh release create "$TAG" "tinclib-$TAG.zip" --target "$GITHUB_SHA" \
+            --latest --title "$TAG" --generate-notes --notes-file notes.md

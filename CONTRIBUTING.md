@@ -135,5 +135,7 @@ touch the link, timing or the handoff.
 `TINC_VERSION` is built from the protocol version in `protocol.h`
 (MAJOR.MINOR) plus `TINC_VERSION_PATCH` in `src/tinclib.h`: moving the
 protocol submodule changes it, so reset the patch to 0 then, and bump the
-patch for library-only releases. Pushing a `vX.Y.Z` tag (matching `TINC_VERSION`) drafts a GitHub release with
-the library and the pinned protocol files zipped up.
+patch for library-only releases. Merging to `main` publishes release `vX.Y.Z`
+for `TINC_VERSION` (tagging that commit), with the library and the pinned
+protocol files zipped up. A version that's already released is skipped, so bump
+it in the PR that ships.
