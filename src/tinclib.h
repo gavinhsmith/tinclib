@@ -41,7 +41,7 @@ extern "C" {
  * X.Y, and the board's firmware must too. PATCH counts library-only releases
  * on the same protocol; reset it to 0 when the protocol submodule moves.
  */
-#define TINC_VERSION_PATCH 0
+#define TINC_VERSION_PATCH 1
 
 #define TINC_STR_(x) #x
 #define TINC_STR(x) TINC_STR_(x)
