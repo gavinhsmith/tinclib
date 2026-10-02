@@ -341,8 +341,9 @@ the same change.
   bulleted body. **No `Co-Authored-By: Claude` / "Generated with Claude
   Code" lines** in commits or PR bodies.
 - Work on a branch per phase (`phase-N`), then a PR titled
-  `[merge] vX.Y.Z from phase-N`. Tag `vX.Y.Z` (matching `TINC_VERSION`) to
-  draft a release.
+  `[merge] vX.Y.Z from phase-N`. Merging to `main` publishes release
+  `vX.Y.Z` for `TINC_VERSION` (`release.yml` creates the tag); a version
+  that's already released is skipped, so bump it in the PR that ships.
 - When writing files from Python on this Windows machine, pass
   `encoding="utf-8"`: the default is cp1252, and a failed write truncates
   the file.
