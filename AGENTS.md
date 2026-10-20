@@ -9,7 +9,7 @@ This is the library apps `#include`; it is **not** the config app
 those concerns out of this repo.
 
 Consumes `tinclib-protocol` as a pinned dependency: a git submodule at
-`external/tinclib-protocol`, currently on tag **`v0.6`** (`fde44be`). Upstream tags
+`external/tinclib-protocol`, currently on tag **`v0.7`** (`a35b7c5`). Upstream tags
 `vMAJOR.MINOR` from 0.5 on; `v0.1.0`-`v0.4.0` are aliases for older pins. It lives inside
 the repo root because CEdev on Windows can't build sources reached through
 `..`. **Never fork or hand-copy `protocol.h`/`crc16.c`.** If something needs
@@ -75,10 +75,14 @@ automatically. That's packaging, not a fork.
   BODY_WRITE that took bytes (`tinc_g.tls_wait`). A `tinc_abort()` in that
   window keeps the long timeout. http never uses it. URL scheme match is
   lowercase `https:` only.
+- **v0.7.0 (branch `phase-7`): protocol v0.7.** Admin only again:
+  `INFO` appends the board's `mac[6]`, and `WIFI_SET` takes `pass_len` 0
+  for an open network. The library sends neither, so the change is the
+  version. No API change.
 - **Real firmware, from a PC:** `make pc-link` builds `tools/pc_link.c`
   (the real `src/`, with srldrvce swapped for Win32 serial) and runs it
   against a board on a COM port. The board needs firmware on the same
-  protocol version as the library (now 0.6), or HELLO fails with
+  protocol version as the library (now 0.7), or HELLO fails with
   `ERR_VERSION`.
 - **Hardware-tested as of v0.6.0 (2026-09-23):** the calculator straight
   into a PC (tinclib-firmware's `pc` target, COM9), a calculator with a
@@ -171,7 +175,7 @@ camelCase after the `tinc_` prefix — e.g. `tinc_isActive`, `tinc_httpStatus`,
 not `tinc_IsActive` or `tinc_is_active`). Types: `tinc_snake_case_t`.
 Constants: `TINC_SCREAMING_CASE`.
 
-### Current shape (as implemented in v0.6.0; `src/tinclib.h` is authoritative)
+### Current shape (as implemented in v0.7.0; `src/tinclib.h` is authoritative)
 
 ```c
 typedef struct {
@@ -248,7 +252,7 @@ Key properties to preserve:
 ### Not yet in the API (known gap, don't silently add without flagging)
 - No way to read the nth copy of a repeated header (`HDR_GET`'s `index`),
   to tell a real miss from a `TRUNC` false negative, or to get the board's
-  firmware version (`INFO`). Add them when an app needs them.
+  firmware version or MAC (`INFO`). Add them when an app needs them.
 - No upload progress (bytes taken so far) beyond `TINC_SENDING`.
 
 ## Handoff to TINCLIBC (config app)
