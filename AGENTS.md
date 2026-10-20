@@ -341,9 +341,7 @@ the same change.
 
 ## Workflow
 
-- Commits are authored by Gavin Smith only, `[dev] <summary>` style with a
-  bulleted body. **No `Co-Authored-By: Claude` / "Generated with Claude
-  Code" lines** in commits or PR bodies.
+- Commits use `[dev] <summary>` style with a bulleted body.
 - Work on a branch per phase (`phase-N`), then a PR titled
   `[merge] vX.Y.Z from phase-N`. Merging to `main` publishes release
   `vX.Y.Z` for `TINC_VERSION` (`release.yml` creates the tag); a version
